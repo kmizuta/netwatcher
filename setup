@@ -38,21 +38,41 @@ collect_response ()
    done
 }
 
-# Clean old versions
-launchctl unload \
-   ~/Library/LaunchAgents/local.location.manager.plist > /dev/null 2>&1
-launchctl unload \
-   ~/Library/LaunchAgents/local.netwatcher.plist > /dev/null 2>&1
-rm -f ~/Library/Scripts/LocationManager.sh
-rm -f ~/Library/LaunchAgents/local.location.manager.plist
-rm -f ~/Library/Scripts/netwatcher.sh
-rm -f ~/Library/LaunchAgents/local.netwatcher.plist
-rm -f ~/Documents/LocationManager.log.?
-rm -f ~/Documents/LocationManager.log
-rm -rf ~/Library/Workflows/notify.workflow
-rm -rf ~/Library/Automator/Display\ Notification\ Center\ Alert.action
+uninstall ()
+{
+    launchctl unload \
+       ~/Library/LaunchAgents/local.netwatcher.plist > /dev/null 2>&1
+    rm -f ~/Library/Scripts/netwatcher
+    rm -f ~/Library/LaunchAgents/local.netwatcher.plist
+    rm -f ~/Library/Logs/netwatcher.log
+    rm -f ~/Documents/LocationManager.log
+    rm -rf ~/Library/Workflows/notify.workflow
+    rm -rf ~/Library/Automator/Display\ Notification\ Center\ Alert.action
+}
+
+usage ()
+{
+    printf "Usage: $(basename $0) [-u] [-r]\n"
+    printf "       -u Stop and uninstall\n"
+    printf "       -r Reinstall (re-ask setup questions)\n"
+    exit 0
+}
+
+# Main script
+while getopts ":ur" OPTION; do
+    case $OPTION in
+        u) UNINSTALL=true ;;
+        r) REINSTALL=true ;;
+        ?) usage ;;
+    esac
+done
+shift $((OPTIND-1))
+
+uninstall
+[[ $UNINSTALL == true ]] && exit 0
 
 RC_FILE=~/.netwatcherrc
+[[ $REINSTALL == true ]] && rm -f $RC_FILE
 
 # Load previous settings
 if [[ -r $RC_FILE ]]; then
@@ -109,12 +129,18 @@ else
 
    collect_response "Enter the IP address pattern of your workplace" "10.146"
    printf "WORK_IP_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
+   
+   collect_response "Enter the domain suffix pattern of your workplace" "example.com"
+   printf "WORK_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
 
    collect_response "Enter the SSID for your workplace" "clear"
    printf "WORK_SSID=\"$RESPONSE\"\n" >> $RC_FILE
 
    collect_response "Enter the SSID for your home" "wrt"
    printf "HOME_SSID=\"$RESPONSE\"\n" >> $RC_FILE
+   
+   collect_response "Enter the domain suffix pattern for your home" "internal"
+   printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
 fi
 
 cp -r $(dirname $0)/Library ~/
@@ -124,5 +150,6 @@ launchctl load ~/Library/LaunchAgents/local.netwatcher.plist
 printf "Installation complete\n"
 printf "Use \"defaults read ~/Library/LaunchAgents/local.netwatcher.plist\" to see default plist values\n"
 printf "Use \"defaults write <key> <value> ~/Library/LaunchAgents/local.netwatcher.plist\" to change plist values\n"
+printf "Do \"sudo touch /Library/Preferences/SystemConfiguration\" to test\n"
 
 exit 0
