@@ -1,0 +1,128 @@
+#!/bin/sh
+
+# Functions
+ask ()
+{
+   local done=false
+   while [[ $done == false ]]; do
+      printf " (y/n) "
+      read reply
+      done=true
+      case $reply in
+         n | N | no | NO   ) ANSWER="n"  ;;
+         y | Y | yes | YES ) ANSWER="y" ;;
+         *                 ) printf "\nInvalid response. Try again:"
+                             done=false ;;
+      esac
+   done
+}
+
+collect_response ()
+{
+   local question="$1"
+   local default="$2"
+   local done=false
+
+   while [[ $done == false ]]; do
+      printf "${question}\n"
+      printf "[ Enter = $default ]: "
+      read RESPONSE
+      [[ -z $RESPONSE ]] && RESPONSE="$default"
+      printf "Is \"$RESPONSE\" correct? (y/n) "
+      read reply
+      case $reply in
+         n | N | no | NO   ) done=false ;;
+         y | Y | yes | YES ) done=true  ;;
+         *                 ) printf "\nInvalid response. Try again:" ;;
+      esac
+   done
+}
+
+# Clean old versions
+launchctl unload \
+   ~/Library/LaunchAgents/local.location.manager.plist > /dev/null 2>&1
+launchctl unload \
+   ~/Library/LaunchAgents/local.netwatcher.plist > /dev/null 2>&1
+rm -f ~/Library/Scripts/LocationManager.sh
+rm -f ~/Library/LaunchAgents/local.location.manager.plist
+rm -f ~/Library/Scripts/netwatcher.sh
+rm -f ~/Library/LaunchAgents/local.netwatcher.plist
+rm -f ~/Documents/LocationManager.log.?
+rm -f ~/Documents/LocationManager.log
+rm -rf ~/Library/Workflows/notify.workflow
+rm -rf ~/Library/Automator/Display\ Notification\ Center\ Alert.action
+
+RC_FILE=~/.netwatcherrc
+
+# Load previous settings
+if [[ -r $RC_FILE ]]; then
+   source $RC_FILE
+   printf "Using existing $RC_FILE\n"
+
+else
+   # Collect settings
+   touch $RC_FILE
+
+   if [[ -x /Applications/Proxifier.app/Contents/MacOS/Proxifier ]]; then
+   printf "PROXIFIER=true\n" >> $RC_FILE
+   else
+   printf "PROXIFIER=false\n" >> $RC_FILE
+   fi
+
+   printf "Do you want to watch for wired ethernet connections?"
+   ask
+   if [[ $ANSWER == y ]]; then
+      printf "ETHERNET=true\n" >> $RC_FILE
+   else
+      printf "ETHERNET=false\n" >> $RC_FILE
+   fi
+
+   printf "Do you want to enable flight mode? (Turns off Wi-Fi if not connected)"
+   ask
+   if [[ $ANSWER == y ]]; then
+      printf "FLIGHT_MODE=true\n" >> $RC_FILE
+   else
+      printf "FLIGHT_MODE=false\n" >> $RC_FILE
+   fi
+
+   printf "Do you want to change your status in Messages when your connection changes?"
+   ask
+   if [[ $ANSWER == y ]]; then
+      printf "\nModify $RC_FILE to change the status messages\n\n"
+      printf "WORK_STATUS=\"In my office\"\n" >> $RC_FILE
+      printf "HOME_STATUS=\"At home\"\n" >> $RC_FILE
+      printf "VPN_STATUS=\"On VPN\"\n" >> $RC_FILE
+   fi
+
+   collect_response "Enter the name of your work printer or \"none\" to disable this feature" "XEROX WorkCentre 4250"
+   printf "WORK_PRINTER=\"$RESPONSE\"\n" >> $RC_FILE
+   collect_response "Enter the name of your home printer or \"none\" to disable this feature" "Canon MP560 series"
+   printf "HOME_PRINTER=\"$RESPONSE\"\n" >> $RC_FILE
+
+   printf "Do you want to enable Notification Center alerts? (Requires OSX >= 10.8)"
+   ask
+   if [[ $ANSWER == y ]]; then
+      printf "NOTIFICATION_CENTER=true\n" >> $RC_FILE
+   else
+      printf "NOTIFICATION_CENTER=false\n" >> $RC_FILE
+   fi
+
+   collect_response "Enter the IP address pattern of your workplace" "10.146"
+   printf "WORK_IP_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
+
+   collect_response "Enter the SSID for your workplace" "clear"
+   printf "WORK_SSID=\"$RESPONSE\"\n" >> $RC_FILE
+
+   collect_response "Enter the SSID for your home" "wrt"
+   printf "HOME_SSID=\"$RESPONSE\"\n" >> $RC_FILE
+fi
+
+cp -r $(dirname $0)/Library ~/
+cat $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist | \
+   sed "s/USERX/$USER/g" > ~/Library/LaunchAgents/local.netwatcher.plist
+launchctl load ~/Library/LaunchAgents/local.netwatcher.plist
+printf "Installation complete\n"
+printf "Use \"defaults read ~/Library/LaunchAgents/local.netwatcher.plist\" to see default plist values\n"
+printf "Use \"defaults write <key> <value> ~/Library/LaunchAgents/local.netwatcher.plist\" to change plist values\n"
+
+exit 0

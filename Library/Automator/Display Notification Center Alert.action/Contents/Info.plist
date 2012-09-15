@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AMAccepts</key>
+	<dict>
+		<key>Container</key>
+		<string>List</string>
+		<key>Optional</key>
+		<true/>
+		<key>Types</key>
+		<array>
+			<string>*</string>
+		</array>
+	</dict>
+	<key>AMApplication</key>
+	<string>System</string>
+	<key>AMCanShowSelectedItemsWhenRun</key>
+	<false/>
+	<key>AMCanShowWhenRun</key>
+	<false/>
+	<key>AMCategory</key>
+	<array>
+		<string>AMCategoryUtilities</string>
+	</array>
+	<key>AMDefaultParameters</key>
+	<dict>
+		<key>tSubtitle</key>
+		<string></string>
+		<key>tText</key>
+		<string></string>
+		<key>tTitle</key>
+		<string></string>
+	</dict>
+	<key>AMDescription</key>
+	<dict>
+		<key>AMDAlert</key>
+		<string></string>
+		<key>AMDInput</key>
+		<string></string>
+		<key>AMDNote</key>
+		<string></string>
+		<key>AMDOptions</key>
+		<string></string>
+		<key>AMDRelatedActions</key>
+		<string></string>
+		<key>AMDRequires</key>
+		<string>OS X 10.8.x</string>
+		<key>AMDResult</key>
+		<string></string>
+		<key>AMDSummary</key>
+		<string>This action displays a notification center alert.</string>
+		<key>AMDWebsite</key>
+		<string>http://www.automatedworkflows.com</string>
+	</dict>
+	<key>AMIconName</key>
+	<string>Notifications</string>
+	<key>AMKeywords</key>
+	<array>
+		<string>Automated Workflows, LLC</string>
+		<string>notifications</string>
+		<string>alerts</string>
+		<string>messages</string>
+		<string>dialogs</string>
+	</array>
+	<key>AMName</key>
+	<string>Display Notification Center Alert</string>
+	<key>AMProvides</key>
+	<dict>
+		<key>Container</key>
+		<string>List</string>
+		<key>Types</key>
+		<array>
+			<string>*</string>
+		</array>
+	</dict>
+	<key>AMRequiredResources</key>
+	<array/>
+	<key>AMWarning</key>
+	<dict>
+		<key>Action</key>
+		<string></string>
+		<key>ApplyButton</key>
+		<string>Add</string>
+		<key>IgnoreButton</key>
+		<string></string>
+		<key>Level</key>
+		<integer>0</integer>
+		<key>Message</key>
+		<string></string>
+	</dict>
+	<key>BuildMachineOSBuild</key>
+	<string>12B19</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>Display Notification Center Alert</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.automatedworkflows.product.automator.Display-Notification-Center-Alert</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Display Notification Center Alert</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.1</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string></string>
+	<key>DTCompiler</key>
+	<string></string>
+	<key>DTPlatformBuild</key>
+	<string>4F1003</string>
+	<key>DTPlatformVersion</key>
+	<string>GM</string>
+	<key>DTSDKBuild</key>
+	<string>12A264</string>
+	<key>DTSDKName</key>
+	<string>macosx10.8</string>
+	<key>DTXcode</key>
+	<string>0441</string>
+	<key>DTXcodeBuild</key>
+	<string>4F1003</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2012 Automated Workflows, LLC. All rights reserved.</string>
+	<key>NSPrincipalClass</key>
+	<string>Display_Notification_Center_Alert</string>
+</dict>
+</plist>
