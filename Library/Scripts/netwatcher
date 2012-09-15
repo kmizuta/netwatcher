@@ -191,7 +191,7 @@ finish() {
 #
 
 # If -t was passed as an option than set as throttle limit
-while getopts ":t" OPTION; do
+while getopts ":t:" OPTION; do
     case $OPTION in
         t) THROTTLE=$OPTARG ;;
         ?) ;;
@@ -208,7 +208,7 @@ if [[ $(/usr/bin/du -h $LOGFILE | awk '{print $1}') =~ M ]]; then
 fi
 
 # Log start of main logic
-printf %b%s%b "\n" "$(print_break 20) $(date '+%b %d %H:%M:%S') $(print_break 20)" "\n"
+printf %b%s%b "\n" "$(print_break 20) $(date '+%b %d %H:%M:%S') $(print_break 21)" "\n"
 
 # Exit if we ran less than $THROTTLE seconds ago
 [[ -z $THROTTLE ]] && THROTTLE=15
