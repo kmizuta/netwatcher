@@ -7,7 +7,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Users/USERX/Library/Scripts/netwatcher</string>
-        <string>-t 15</string>
+        <string>-t 30</string>
     </array>
     <!--
         Watching SystemConfiguration dir is not perfect as we seem

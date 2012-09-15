@@ -123,8 +123,11 @@ set_chat_status()
 {
    local status="$1"
    if [[ $status != none ]] && [[ -n $status ]]; then
+      killall Messages
       /usr/bin/osascript <<EOF
 tell application "Messages"
+log in
+set status to available
 set the status message to "$status"
 end tell
 EOF
