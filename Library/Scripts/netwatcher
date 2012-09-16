@@ -172,7 +172,7 @@ print_break () {
 }
 
 finish() {
-   local last_config="$1"
+   local last_config="$@"
    if [[ -n $last_config ]] && [[ $last_config != restart ]]; then
       printf "$last_config" > $LAST_MARKER
    elif [[ $last_config == restart ]]; then
