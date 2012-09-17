@@ -19,6 +19,17 @@
 #
 #    CREDITS
 #      Massimo Castelli
+#
+#    Dependency rules for VPN and Proxifier
+#     - cable:work:cisco n:proxy y
+#     - cable:home:if cisco active then proxy y else proxy kill
+#     - wi-fi:work:cisco y:proxy y
+#     - wi-fi:!work:if cisco active then proxy y else proxy kill
+#
+#-------------------------------------------------------------------------------
+# Constants
+CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/MacOS/Cisco AnyConnect VPN Client"
+    PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
 #-------------------------------------------------------------------------------
 # Load user options to change code behaviour
@@ -78,8 +89,8 @@ get_ssid ()
 start_vpn ()
 {
    local interface=$1
-   if [[ -x "/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/MacOS/Cisco AnyConnect VPN Client" ]]; then
-      nohup "/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/MacOS/Cisco AnyConnect VPN Client" > /dev/null 2>&1 &
+   if [[ -x "$CISCO_ANYC_EXE" ]]; then
+      nohup "$CISCO_ANYC_EXE" > /dev/null 2>&1 &
       printf "Started Cisco AnyConnect VPN Client [pid $!]\nWaiting for user to establish the VPN connection.\n"
       # Now wait for VPN authentication to complete
       ((count=0))
@@ -109,10 +120,10 @@ start_vpn ()
 start_proxifier()
 {
    if [[ ! $PROXIFIER == false ]]; then
-      if [[ -x /Applications/Proxifier.app/Contents/MacOS/Proxifier ]]; then
+      if [[ -x "$PROXYF_EXE" ]]; then
          local pid=$(/bin/ps -f -U $USER | grep 'Proxifier' | grep -v 'grep')
          if [[ -z $pid ]]; then
-            nohup /Applications/Proxifier.app/Contents/MacOS/Proxifier -SettingsShowMainWindow 0 > /dev/null 2>&1 &
+            nohup "$PROXYF_EXE" -SettingsShowMainWindow 0 > /dev/null 2>&1 &
             printf "Started Proxifier [pid $!]\n"
          fi
       fi
@@ -159,11 +170,23 @@ EOF
 quit_program ()
 {
    local program="$1"
+   printf "Quitting  $program\n"
    /usr/bin/osascript <<EOF
 tell application "$program"
     quit
 end tell
 EOF
+}
+
+return_program_status ()
+{
+   local executable=$1
+   local status=$(ps -e | grep "$1" | grep -v grep)
+   if [[ $status == "" ]]; then
+     printf "inactive"
+   else
+     printf "active"
+   fi
 }
 
 print_break () {
@@ -242,14 +265,14 @@ done
 unset IFS
 
 # Make sure something is different than the last run (should always be the case, but...)
-if [[ -r $LAST_MARKER ]]; then
-   LAST_CONFIG="$(cat $LAST_MARKER)"
-   if [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]] || \
-      [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
-      printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-      finish
-   fi
-fi
+## if [[ -r $LAST_MARKER ]]; then
+##    LAST_CONFIG="$(cat $LAST_MARKER)"
+##    if [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]] || \
+##       [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+##       printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+##       finish
+##    fi
+## fi
 
 
 #printf "Will probe for network changes in "
@@ -291,7 +314,11 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
          else
             notify "Non-work location" "Ethernet IP: $IP Domain: $DOMAIN"
             set_default_printer "$HOME_PRINTER"
-            quit_program "Proxifier"
+            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            if [[ $CISCO_STATUS == inactive ]]; then
+               quit_program "Proxifier"
+            fi
          fi
          printf "On ethernet, turning off Wi-Fi... "
          turn_off_airport $WIFI_IF
@@ -342,19 +369,34 @@ if [[ -n $SSID ]]; then
       printf "SSID: $SSID\nIP: $IP\nDomain: $DOMAIN\n"
       if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
          notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-         start_proxifier
-         quit_program "Cisco AnyConnect VPN Client"
-         start_vpn $WIFI_IF
+         PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
+         printf " Proxifier status: $PROXYF_STATUS\n"
+         if [[ $PROXYF_STATUS == inactive ]]; then
+            start_proxifier
+         fi
+         CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+         printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+         if [[ $CISCO_STATUS == inactive ]]; then
+            start_vpn $WIFI_IF
+         fi
          set_default_printer "$WORK_PRINTER"
          set_chat_status "$VPN_STATUS"
       elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
          notify "Home location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-         quit_program "Proxifier"
+         CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+         printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+         if [[ $CISCO_STATUS == inactive ]]; then
+            quit_program "Proxifier"
+         fi
          set_default_printer "$HOME_PRINTER"
          set_chat_status "$HOME_STATUS"
       else
          notify "Non-work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-         quit_program "Proxifier"
+         CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+         printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+         if [[ $CISCO_STATUS == inactive ]]; then
+            quit_program "Proxifier"
+         fi
       fi
    fi
 else
