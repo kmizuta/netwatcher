@@ -170,7 +170,7 @@ EOF
 quit_program ()
 {
     local program="$1"
-    printf "Quitting  $program\n"
+    printf "Quitting $program\n"
     /usr/bin/osascript <<EOF
 tell application "$program"
      quit
@@ -225,9 +225,10 @@ shift $((OPTIND-1))
 # Purge log if it is megabyte(s)
 LOGFILE=$(defaults read /Users/$USER/Library/LaunchAgents/local.netwatcher | \
     awk -F\" '/StandardOutPath/ { print $2 }')
-if [[ $(/usr/bin/du -h $LOGFILE | awk '{print $1}') =~ M ]]; then
-    printf "Purging $LOGFILE\n"
-    rm -f $LOGFILE && touch $LOGFILE
+LOGSIZE=$(/usr/bin/du -k $LOGFILE | awk '{print $1}')
+if ((LOGSIZE > 1024 )); then
+    : > $LOGFILE
+    printf "$(date '+%b %d %H:%M:%S'): Purged $LOGFILE\n"
 fi
 
 # Log start of main logic
@@ -267,8 +268,13 @@ unset IFS
 # Make sure something is different than the last run (should always be the case, but...)
 if [[ -r $LAST_MARKER ]]; then
     LAST_CONFIG="$(cat $LAST_MARKER)"
-    if [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]] || \
-        [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+    if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+        ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
+        if [[ $ETHERNET_STATUS == inactive ]]; then
+            printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+            finish
+        fi
+    elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
         printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
         finish
     fi

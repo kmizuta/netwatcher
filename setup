@@ -155,8 +155,8 @@ else
    printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
 fi
 
+sed -i .bak "s/USERX/$USER/g" $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist
 cp -r $(dirname $0)/Library ~/
-cat $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist | sed "s/USERX/$USER/g" > ${HOME}/Library/LaunchAgents/local.netwatcher.plist
 
 if [[ $THROTTLE_SET == true ]]; then
    printf "Setting Throttle time to "$THROTTLE_TIME"\n"
@@ -166,7 +166,7 @@ if [[ $THROTTLE_SET == true ]]; then
 else
    defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
             ProgramArguments \
-            -array "/Users/USERX/Library/Scripts/netwatcher" "-t 15"
+            -array "${HOME}/Library/Scripts/netwatcher" "-t 15"
 fi
 
 launchctl load ~/Library/LaunchAgents/local.netwatcher.plist
