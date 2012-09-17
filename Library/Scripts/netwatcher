@@ -42,170 +42,170 @@ source ~/.netwatcherrc
 #
 notify ()
 {
-   local subtitle="$1"
-   local message="$2"
-   local osx_version=$(/usr/bin/sw_vers | \
-      awk '/^ProductVersion:/ { sub (/..$/, "") ; sub (/\./, "") ; print $2 }')
-   if [[ ! $NOTIFICATION_CENTER == false ]]; then
-      if ((osx_version >= 108)); then
-         automator -D title="LaunchAgent: local.netwatcher" \
-            -D subtitle="$subtitle" -D message="$message" \
-            ~/Library/Workflows/notify.workflow 1> /dev/null 2>&1
-      fi
-   fi
+    local subtitle="$1"
+    local message="$2"
+    local osx_version=$(/usr/bin/sw_vers | \
+        awk '/^ProductVersion:/ { sub (/..$/, "") ; sub (/\./, "") ; print $2 }')
+    if [[ ! $NOTIFICATION_CENTER == false ]]; then
+        if ((osx_version >= 108)); then
+            automator -D title="LaunchAgent: local.netwatcher" \
+                -D subtitle="$subtitle" -D message="$message" \
+                ~/Library/Workflows/notify.workflow 1> /dev/null 2>&1
+        fi
+    fi
 }
 
 turn_on_airport ()
 {
-   local interface=$1
-   /usr/sbin/networksetup -setairportpower $interface on
+    local interface=$1
+    /usr/sbin/networksetup -setairportpower $interface on
 }
 
 turn_off_airport ()
 {
-   local interface=$1
-   /usr/sbin/networksetup -setairportpower $interface off
-   sleep 5 # triggers another network_change
+    local interface=$1
+    /usr/sbin/networksetup -setairportpower $interface off
+    sleep 5 # triggers another network_change
 }
 
 return_interface_status ()
 {
-   local interface=$1
-   local status=$(/sbin/ifconfig $interface 2>/dev/null | awk '/status:/ { print $NF }')
-   if [[ ! $status =~ active ]]; then
-      status=inactive
-   fi
-   printf $status
+    local interface=$1
+    local status=$(/sbin/ifconfig $interface 2>/dev/null | awk '/status:/ { print $NF }')
+    if [[ ! $status =~ active ]]; then
+        status=inactive
+    fi
+    printf $status
 }
 
 get_ssid ()
 {
-   local interface=$1
-   local ssid="$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I |\
-      awk -F': ' '/^.* SSID/ { print $2 }')"
-   printf $ssid
+    local interface=$1
+    local ssid="$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I |\
+        awk -F': ' '/^.* SSID/ { print $2 }')"
+    printf $ssid
 }
 
 start_vpn ()
 {
-   local interface=$1
-   if [[ -x "$CISCO_ANYC_EXE" ]]; then
-      nohup "$CISCO_ANYC_EXE" > /dev/null 2>&1 &
-      printf "Started Cisco AnyConnect VPN Client [pid $!]\nWaiting for user to establish the VPN connection.\n"
-      # Now wait for VPN authentication to complete
-      ((count=0))
-      while ((count != 30 )); do # 30 iterations * 2 second sleeps = 60 seconds or bust
-         ifconfig -lu | grep -oq utun0
-         if [[ $? == 0 ]]; then
-            break
-         else
-            sleep 2
+    local interface=$1
+    if [[ -x "$CISCO_ANYC_EXE" ]]; then
+        nohup "$CISCO_ANYC_EXE" > /dev/null 2>&1 &
+        printf "Started Cisco AnyConnect VPN Client [pid $!]\nWaiting for user to establish the VPN connection.\n"
+        # Now wait for VPN authentication to complete
+        ((count=0))
+        while ((count != 30 )); do # 30 iterations * 2 second sleeps = 60 seconds or bust
+            ifconfig -lu | grep -oq utun0
+            if [[ $? == 0 ]]; then
+                break
+            else
+                sleep 2
+                ((count++))
+            fi
+        done
+        # VPN creates a tunnel interface, which momentarily causes the real interface to go down
+        # Wait for the real interface to get its ip back. Reason we don't block on getting a utun0
+        # ip is that user could cancel VPN login process, forget password, etc. We want to exit this
+        # script in a reasonable amount of time
+        IP=$(/usr/sbin/ipconfig getifaddr $interface)
+        ((count=0))
+        while [[ ! $IP =~ [1-9] ]] && ((count != 15)); do
+            sleep 1
+            IP=$(/usr/sbin/ipconfig getifaddr $interface)
             ((count++))
-         fi
-      done
-      # VPN creates a tunnel interface, which momentarily causes the real interface to go down
-      # Wait for the real interface to get its ip back. Reason we don't block on getting a utun0
-      # ip is that user could cancel VPN login process, forget password, etc. We want to exit this
-      # script in a reasonable amount of time
-      IP=$(/usr/sbin/ipconfig getifaddr $interface)
-      ((count=0))
-      while [[ ! $IP =~ [1-9] ]] && ((count != 15)); do
-         sleep 1
-         IP=$(/usr/sbin/ipconfig getifaddr $interface)
-         ((count++))
-      done
-   fi
+        done
+    fi
 }
 
 start_proxifier()
 {
-   if [[ ! $PROXIFIER == false ]]; then
-      if [[ -x "$PROXYF_EXE" ]]; then
-         local pid=$(/bin/ps -f -U $USER | grep 'Proxifier' | grep -v 'grep')
-         if [[ -z $pid ]]; then
-            nohup "$PROXYF_EXE" -SettingsShowMainWindow 0 > /dev/null 2>&1 &
-            printf "Started Proxifier [pid $!]\n"
-         fi
-      fi
-   fi
+    if [[ ! $PROXIFIER == false ]]; then
+        if [[ -x "$PROXYF_EXE" ]]; then
+            local pid=$(/bin/ps -f -U $USER | grep 'Proxifier' | grep -v 'grep')
+            if [[ -z $pid ]]; then
+                nohup "$PROXYF_EXE" -SettingsShowMainWindow 0 > /dev/null 2>&1 &
+                printf "Started Proxifier [pid $!]\n"
+            fi
+        fi
+    fi
 }
 
 set_chat_status()
 {
-   local status="$1"
-   if [[ $status != none ]] && [[ -n $status ]]; then
-      killall Messages
-      /usr/bin/osascript <<EOF
+    local status="$1"
+    if [[ $status != none ]] && [[ -n $status ]]; then
+        killall Messages
+        /usr/bin/osascript <<EOF
 tell application "Messages"
 log in
 set status to available
 set the status message to "$status"
 end tell
 EOF
-   fi
+    fi
 }
 
 set_default_printer()
 {
-   local printer="$1"
-   if [[ $printer != none ]] && [[ -n $printer ]]; then
-      /usr/bin/osascript <<EOF
+    local printer="$1"
+    if [[ $printer != none ]] && [[ -n $printer ]]; then
+        /usr/bin/osascript <<EOF
 tell application "Printer Setup Utility"
 set the_printer to the current printer
 set the_name to the name of the_printer
 if the_name is not "$printer" then
-   set the_count to the count of printers
-   repeat with x from 1 to the_count
-      if the name of printer x is "$printer" then
-         set the current printer to printer x
-      end if
-   end repeat
+    set the_count to the count of printers
+    repeat with x from 1 to the_count
+        if the name of printer x is "$printer" then
+            set the current printer to printer x
+        end if
+    end repeat
 end if
 quit
 end tell
 EOF
-   fi
+    fi
 }
 
 quit_program ()
 {
-   local program="$1"
-   printf "Quitting  $program\n"
-   /usr/bin/osascript <<EOF
+    local program="$1"
+    printf "Quitting  $program\n"
+    /usr/bin/osascript <<EOF
 tell application "$program"
-    quit
+     quit
 end tell
 EOF
 }
 
 return_program_status ()
 {
-   local executable=$1
-   local status=$(ps -e | grep "$1" | grep -v grep)
-   if [[ $status == "" ]]; then
-     printf "inactive"
-   else
-     printf "active"
-   fi
+    local executable=$1
+    local status=$(ps -e | grep "$executable" | grep -v grep)
+    if [[ $status == "" ]]; then
+      printf "inactive"
+    else
+      printf "active"
+    fi
 }
 
 print_break () {
-   local hashes=$1
-   for (( count=0; count!=hashes; count++ )) { printf %s '-'; }
+    local hashes=$1
+    for (( count=0; count!=hashes; count++ )) { printf %s '-'; }
 }
 
 finish() {
-   local last_config="$@"
-   if [[ -n $last_config ]] && [[ $last_config != restart ]]; then
-      printf "$last_config" > $LAST_MARKER
-   elif [[ $last_config == restart ]]; then
-      rm $LAST_MARKER
-   else 
-      touch $LAST_MARKER
-   fi
+    local last_config="$@"
+    if [[ -n $last_config ]] && [[ $last_config != restart ]]; then
+        printf "$last_config" > $LAST_MARKER
+    elif [[ $last_config == restart ]]; then
+        rm $LAST_MARKER
+    else
+        touch $LAST_MARKER
+    fi
 
-   printf %s%b $(print_break 60) "\n"
-   exit 0
+    printf %s%b $(print_break 60) "\n"
+    exit 0
 }
 
 #-------------------------------------------------------------------------------
@@ -215,19 +215,19 @@ finish() {
 
 # If -t was passed as an option than set as throttle limit
 while getopts ":t:" OPTION; do
-    case $OPTION in
-        t) THROTTLE=$OPTARG ;;
-        ?) ;;
-    esac
+     case $OPTION in
+          t) THROTTLE=$OPTARG ;;
+          ?) ;;
+     esac
 done
 shift $((OPTIND-1))
 
 # Purge log if it is megabyte(s)
 LOGFILE=$(defaults read /Users/$USER/Library/LaunchAgents/local.netwatcher | \
-   awk -F\" '/StandardOutPath/ { print $2 }')
+    awk -F\" '/StandardOutPath/ { print $2 }')
 if [[ $(/usr/bin/du -h $LOGFILE | awk '{print $1}') =~ M ]]; then
-   printf "Purging $LOGFILE\n"
-   rm -f $LOGFILE && touch $LOGFILE
+    printf "Purging $LOGFILE\n"
+    rm -f $LOGFILE && touch $LOGFILE
 fi
 
 # Log start of main logic
@@ -237,42 +237,42 @@ printf %b%s%b "\n" "$(print_break 20) $(date '+%b %d %H:%M:%S') $(print_break 21
 [[ -z $THROTTLE ]] && THROTTLE=15
 LAST_MARKER=~/.netwatcher_last
 if [[ -r $LAST_MARKER ]]; then
-   NOW=$(date +%s)
-   LAST_UPDATE=$(stat -f %m $LAST_MARKER)
-   if (( $((NOW - LAST_UPDATE)) < THROTTLE )); then
-      printf "Ran less than $THROTTLE seconds ago, exiting.\n"
-      finish
-   fi
+    NOW=$(date +%s)
+    LAST_UPDATE=$(stat -f %m $LAST_MARKER)
+    if (( $((NOW - LAST_UPDATE)) < THROTTLE )); then
+        printf "Ran less than $THROTTLE seconds ago, exiting.\n"
+        finish
+    fi
 fi
 
 # See which network interfaces we are able to monitor (we ignore
 # "Bluetooth Modem" by only matching devices that have "en" in their name)
 printf "Probing for [previously] configured interfaces...\n"
 IFACES="$(/usr/sbin/networksetup -listnetworkserviceorder \
-   | grep 'en.)' \
-   | sed -e s/^'(Hardware Port: '// \
-      -e s/', Device:'// \
-      -e s/')'//)"
+    | grep 'en.)' \
+    | sed -e s/^'(Hardware Port: '// \
+        -e s/', Device:'// \
+        -e s/')'//)"
 IFS=$(printf "\n\b")
 for IF in $IFACES; do
-   printf "    $IF\n"
-   if [[ $IF =~ Ethernet ]]; then
-      ETHERNET_IF=$(printf $IF | awk '{ print $NF }')
-   elif [[ $IF =~ Wi-Fi ]]; then
-      WIFI_IF=$(printf $IF | awk '{ print $NF }')
-   fi
+    printf "    $IF\n"
+    if [[ $IF =~ Ethernet ]]; then
+        ETHERNET_IF=$(printf $IF | awk '{ print $NF }')
+    elif [[ $IF =~ Wi-Fi ]]; then
+        WIFI_IF=$(printf $IF | awk '{ print $NF }')
+    fi
 done
 unset IFS
 
 # Make sure something is different than the last run (should always be the case, but...)
-## if [[ -r $LAST_MARKER ]]; then
-##    LAST_CONFIG="$(cat $LAST_MARKER)"
-##    if [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]] || \
-##       [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
-##       printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-##       finish
-##    fi
-## fi
+if [[ -r $LAST_MARKER ]]; then
+    LAST_CONFIG="$(cat $LAST_MARKER)"
+    if [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]] || \
+        [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+        printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+        finish
+    fi
+fi
 
 
 #printf "Will probe for network changes in "
@@ -282,52 +282,52 @@ notify "Network configuration change" "Processing ruleset"
 
 # Ethernet trumps Wi-Fi no matter what
 if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
-   printf "Checking link status for $ETHERNET_IF (ethernet)..."
-   ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
-   ((count=0)) # If cable was just plugged-in we need time for DHCP to do its thing
-   while [[ $ETHERNET_STATUS != active ]] && ((count != 5)); do
-      sleep 1
-      printf "."
-      ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
-      ((count++))
-   done
-   printf " $ETHERNET_STATUS\n"
-   if [[ $ETHERNET_STATUS == active ]]; then
-      printf "Fetching IP and Domain info for $ETHERNET_IF (ethernet)..."
-      IP=$(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)
-      ((count=0))
-      while [[ ! $IP =~ [1-9] ]] && ((count != 15)); do
-         sleep 1
-         printf "."
-         IP=$(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)
-         ((count++))
-      done
-      DOMAIN=$(/usr/sbin/ipconfig getoption $ETHERNET_IF domain_name)
-      if [[ $IP =~ [1-9] ]]; then
-         printf "\n    IP: $IP DOMAIN: $DOMAIN\n"
-         if [[ $IP =~ $WORK_IP_PATTERN ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
-            notify "Work location" "Ethernet IP: $IP Domain: $DOMAIN"
-            quit_program "Cisco AnyConnect VPN Client"
-            start_proxifier
-            set_default_printer "$WORK_PRINTER"
-            set_chat_status "$WORK_STATUS"
-         else
-            notify "Non-work location" "Ethernet IP: $IP Domain: $DOMAIN"
-            set_default_printer "$HOME_PRINTER"
-            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
-            if [[ $CISCO_STATUS == inactive ]]; then
-               quit_program "Proxifier"
+    printf "Checking link status for $ETHERNET_IF (ethernet)..."
+    ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
+    ((count=0)) # If cable was just plugged-in we need time for DHCP to do its thing
+    while [[ $ETHERNET_STATUS != active ]] && ((count != 5)); do
+        sleep 1
+        printf "."
+        ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
+        ((count++))
+    done
+    printf " $ETHERNET_STATUS\n"
+    if [[ $ETHERNET_STATUS == active ]]; then
+        printf "Fetching IP and Domain info for $ETHERNET_IF (ethernet)..."
+        IP=$(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)
+        ((count=0))
+        while [[ ! $IP =~ [1-9] ]] && ((count != 15)); do
+            sleep 1
+            printf "."
+            IP=$(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)
+            ((count++))
+        done
+        DOMAIN=$(/usr/sbin/ipconfig getoption $ETHERNET_IF domain_name)
+        if [[ $IP =~ [1-9] ]]; then
+            printf "\n    IP: $IP DOMAIN: $DOMAIN\n"
+            if [[ $IP =~ $WORK_IP_PATTERN ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
+                notify "Work location" "Ethernet IP: $IP Domain: $DOMAIN"
+                quit_program "Cisco AnyConnect VPN Client"
+                start_proxifier
+                set_default_printer "$WORK_PRINTER"
+                set_chat_status "$WORK_STATUS"
+            else
+                notify "Non-work location" "Ethernet IP: $IP Domain: $DOMAIN"
+                set_default_printer "$HOME_PRINTER"
+                CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+                printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+                if [[ $CISCO_STATUS == inactive ]]; then
+                    quit_program "Proxifier"
+                fi
             fi
-         fi
-         printf "On ethernet, turning off Wi-Fi... "
-         turn_off_airport $WIFI_IF
-         printf "DONE\n"
-         finish "$ETHERNET_IF $IP"
-      else
-         printf " NONE\n"
-      fi
-   fi
+            printf "On ethernet, turning off Wi-Fi... "
+            turn_off_airport $WIFI_IF
+            printf "DONE\n"
+            finish "$ETHERNET_IF $IP"
+        else
+            printf " NONE\n"
+        fi
+    fi
 fi
 
 # If no ethernet, try Wi-Fi
@@ -337,71 +337,71 @@ printf " $WIFI_STATUS\n"
 
 # If flight mode is enabled and both interfaces are off, we do nothing
 if [[ $FLIGHT_MODE == true ]] && \
-   [[ $ETHERNET_STATUS == inactive ]] && \
-   [[ $WIFI_STATUS == inactive ]]; then
-      notify "No active interfaces" "Flight mode enabled"
-      printf "Flight mode\n"
-      finish flight_mode
+    [[ $ETHERNET_STATUS == inactive ]] && \
+    [[ $WIFI_STATUS == inactive ]]; then
+        notify "No active interfaces" "Flight mode enabled"
+        printf "Flight mode\n"
+        finish flight_mode
 fi
 
 # Turning of Wi-Fi will trigger a separate LaunchAgent, so we exit
 # and let this script get run, again, from the top
 if [[ $WIFI_STATUS == inactive ]]; then
-   notify "$WIFI_IF $WIFI_STATUS" "Turning on Wi-Fi..."
-   printf "Turning on Wi-Fi..."
-   turn_on_airport $WIFI_IF
-   printf "DONE\n"
-   finish restart
+    notify "$WIFI_IF $WIFI_STATUS" "Turning on Wi-Fi..."
+    printf "Turning on Wi-Fi..."
+    turn_on_airport $WIFI_IF
+    printf "DONE\n"
+    finish restart
 fi
 
-# TODO (?) - aceept a hash of know SSIDs and their resepctive prefs, then
+# TODO (?) - aceept a hash of known SSIDs and their respective prefs, then
 # act accordingly. Too much work for me, as I see no action necessary
 # for a public hotspot beyond killing off Proxifier, and the else clause
-# below does that for me
+# below does that
 
 # Okey dokey. By now we should have associated with a Wi-Fi network
 IP=noip
 SSID="$(get_ssid $WIFI_IF)"
 if [[ -n $SSID ]]; then
-   IP=$(/usr/sbin/ipconfig getifaddr $WIFI_IF)
-   DOMAIN=$(/usr/sbin/ipconfig getoption $WIFI_IF domain_name)
-   if [[ $IP =~ [1-9] ]]; then
-      printf "SSID: $SSID\nIP: $IP\nDomain: $DOMAIN\n"
-      if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
-         notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-         PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
-         printf " Proxifier status: $PROXYF_STATUS\n"
-         if [[ $PROXYF_STATUS == inactive ]]; then
-            start_proxifier
-         fi
-         CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-         printf " Cisco Anyconnect status: $CISCO_STATUS\n"
-         if [[ $CISCO_STATUS == inactive ]]; then
-            start_vpn $WIFI_IF
-         fi
-         set_default_printer "$WORK_PRINTER"
-         set_chat_status "$VPN_STATUS"
-      elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
-         notify "Home location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-         CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-         printf " Cisco Anyconnect status: $CISCO_STATUS\n"
-         if [[ $CISCO_STATUS == inactive ]]; then
-            quit_program "Proxifier"
-         fi
-         set_default_printer "$HOME_PRINTER"
-         set_chat_status "$HOME_STATUS"
-      else
-         notify "Non-work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-         CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-         printf " Cisco Anyconnect status: $CISCO_STATUS\n"
-         if [[ $CISCO_STATUS == inactive ]]; then
-            quit_program "Proxifier"
-         fi
-      fi
-   fi
+    IP=$(/usr/sbin/ipconfig getifaddr $WIFI_IF)
+    DOMAIN=$(/usr/sbin/ipconfig getoption $WIFI_IF domain_name)
+    if [[ $IP =~ [1-9] ]]; then
+        printf "SSID: $SSID\nIP: $IP\nDomain: $DOMAIN\n"
+        if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
+            notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
+            PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
+            printf " Proxifier status: $PROXYF_STATUS\n"
+            if [[ $PROXYF_STATUS == inactive ]]; then
+                start_proxifier
+            fi
+            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            if [[ $CISCO_STATUS == inactive ]]; then
+                start_vpn $WIFI_IF
+            fi
+            set_default_printer "$WORK_PRINTER"
+            set_chat_status "$VPN_STATUS"
+        elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
+            notify "Home location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
+            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            if [[ $CISCO_STATUS == inactive ]]; then
+                quit_program "Proxifier"
+            fi
+            set_default_printer "$HOME_PRINTER"
+            set_chat_status "$HOME_STATUS"
+        else
+            notify "Non-work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
+            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
+            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            if [[ $CISCO_STATUS == inactive ]]; then
+                quit_program "Proxifier"
+            fi
+        fi
+    fi
 else
-   notify "Timeout" "No known networks responded in time"
-   printf "No known Wi-Fi networks in range.\n"
+    notify "Timeout" "No known networks responded in time"
+    printf "No known Wi-Fi networks in range.\n"
 fi
 
 finish "$WIFI_IF" "$IP"
