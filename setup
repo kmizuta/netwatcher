@@ -177,7 +177,7 @@ else
          -array "${HOME}/Library/Scripts/netwatcher" "$L_OPTIONS"
 fi
 
-ptutil -convert xml1 ~/Library/LaunchAgents/local.netwatcher.plist
+plutil -convert xml1 ~/Library/LaunchAgents/local.netwatcher.plist
 launchctl load ~/Library/LaunchAgents/local.netwatcher.plist
 
 printf "Installation complete\n"

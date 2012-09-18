@@ -99,12 +99,12 @@ start_vpn ()
         printf "Started Cisco AnyConnect VPN Client [pid $!]\nWaiting for user to establish the VPN connection.\n"
         # Now wait for VPN authentication to complete
         ((count=0))
-        while ((count != 30 )); do # 30 iterations * 2 second sleeps = 60 seconds or bust
+        while ((count != 16)); do
             ifconfig -lu | grep -oq utun0
             if [[ $? == 0 ]]; then
                 break
             else
-                sleep 2
+                sleep 1.5
                 ((count++))
             fi
         done
@@ -196,7 +196,7 @@ return_program_status ()
 
 print_break () {
     local hashes=$1
-    for (( count=0; count!=hashes; count++ )) { printf %s '-'; }
+    for ((count=0; count!=hashes; count++)) { printf %s '-'; }
 }
 
 finish() {
