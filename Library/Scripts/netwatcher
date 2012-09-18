@@ -271,7 +271,7 @@ for IF in $IFACES; do
 done
 unset IFS
 
-if [[ ! $DISABLED_OPTIMIZED_LOOP == y ]]; then
+if [[ $DISABLED_OPTIMIZED_LOOP == n ]]; then
 # Make sure something is different than the last run (should always be the case, but...)
    if [[ -r $LAST_MARKER ]]; then
        LAST_CONFIG="$(cat $LAST_MARKER)"

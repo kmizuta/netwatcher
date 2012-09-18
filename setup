@@ -45,7 +45,6 @@ uninstall ()
     rm -f ~/Library/Scripts/netwatcher
     rm -f ~/Library/LaunchAgents/local.netwatcher.plist
     rm -f ~/Library/Logs/netwatcher.log
-##    rm -f ~/Documents/LocationManager.log
     rm -rf ~/Library/Workflows/notify.workflow
     rm -rf ~/Library/Automator/Display\ Notification\ Center\ Alert.action
 }
@@ -178,6 +177,7 @@ else
          -array "${HOME}/Library/Scripts/netwatcher" "$L_OPTIONS"
 fi
 
+ptutil -convert xml1 ~/Library/LaunchAgents/local.netwatcher.plist
 launchctl load ~/Library/LaunchAgents/local.netwatcher.plist
 
 printf "Installation complete\n"
