@@ -6,7 +6,7 @@
     <string>local.netwatcher</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/dfelicia/Library/Scripts/netwatcher</string>
+        <string>/Users/USERX/Library/Scripts/netwatcher</string>
         <string>-t 0</string>
     </array>
     <!--
@@ -37,9 +37,9 @@
         </dict>
     </dict-->
     <key>StandardOutPath</key>
-    <string>/Users/dfelicia/Library/logs/netwatcher.log</string>
+    <string>/Users/USERX/Library/logs/netwatcher.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/dfelicia/Library/logs/netwatcher.log</string>
+    <string>/Users/USERX/Library/logs/netwatcher.log</string>
     <key>Debug</key>
     <false/>
     <!--
@@ -49,6 +49,8 @@
     <key>KeepAlive</key>
     <false/>
     <key>AbandonProcessGroup</key>
+    <true/>
+    <key>RunAtLoad</key>
     <true/>
 </dict>
 </plist>

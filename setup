@@ -56,6 +56,7 @@ usage ()
     printf "       -u Stop and uninstall\n"
     printf "       -r Reinstall (re-ask setup questions)\n"
     printf "       -t secs Changes throttledown timer\n"
+    printf "       -o disable optimized loop\n"
     exit 0
 }
 
@@ -66,12 +67,14 @@ errtrap ()
     exit 1
 }
 
+#-------------------------------------------------------------------------------
 # Main script
-while getopts ":urt:" OPTION; do
+while getopts ":urt:o" OPTION; do
     case $OPTION in
         u) UNINSTALL=true ;;
         r) REINSTALL=true ;;
         t) THROTTLE_SET=true; THROTTLE_TIME=$OPTARG;;
+        o) DOL=true ;;
         ?) usage ;;
     esac
 done
@@ -155,18 +158,24 @@ else
    printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
 fi
 
-sed -i .bak "s/USERX/$USER/g" $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist
+cat $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist_template | sed "s/USERX/$USER/g" > $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist
 cp -r $(dirname $0)/Library ~/
 
 if [[ $THROTTLE_SET == true ]]; then
-   printf "Setting Throttle time to "$THROTTLE_TIME"\n"
-   defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
-            ProgramArguments \
-            -array "${HOME}/Library/Scripts/netwatcher" "-t $THROTTLE_TIME"
+  L_OPTIONS="-t $THROTTLE_TIME"
 else
-   defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
-            ProgramArguments \
-            -array "${HOME}/Library/Scripts/netwatcher" "-t 15"
+  L_OPTIONS="-t 15"
+fi
+if [[ $DOL == true ]]; then
+  printf "Setting options to $L_OPTIONS -o\n"
+  defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
+         ProgramArguments \
+         -array "${HOME}/Library/Scripts/netwatcher" "$L_OPTIONS" "-o"
+else
+  printf "Setting options to $L_OPTIONS\n"
+  defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
+         ProgramArguments \
+         -array "${HOME}/Library/Scripts/netwatcher" "$L_OPTIONS"
 fi
 
 launchctl load ~/Library/LaunchAgents/local.netwatcher.plist

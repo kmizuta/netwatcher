@@ -32,6 +32,11 @@ CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/Mac
     PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
 #-------------------------------------------------------------------------------
+# Defaults
+DISABLED_OPTIMIZED_LOOP="n"
+THROTTLE=15
+
+#-------------------------------------------------------------------------------
 # Load user options to change code behaviour
 #
 [ -r ~/.netwatcherrc ] || { printf "Cannot read ~/.netwatcherrc.\n"; exit 1; }
@@ -213,10 +218,12 @@ finish() {
 #
 #
 
-# If -t was passed as an option than set as throttle limit
-while getopts ":t:" OPTION; do
+# If -t is passed as an option than set as throttle limit
+# If -o is passed as an option than avoid the no-action optimization
+while getopts ":t:o" OPTION; do
      case $OPTION in
           t) THROTTLE=$OPTARG ;;
+          o) DISABLED_OPTIMIZED_LOOP="y" ;;
           ?) ;;
      esac
 done
@@ -235,7 +242,6 @@ fi
 printf %b%s%b "\n" "$(print_break 20) $(date '+%b %d %H:%M:%S') $(print_break 21)" "\n"
 
 # Exit if we ran less than $THROTTLE seconds ago
-[[ -z $THROTTLE ]] && THROTTLE=15
 LAST_MARKER=~/.netwatcher_last
 if [[ -r $LAST_MARKER ]]; then
     NOW=$(date +%s)
@@ -265,19 +271,23 @@ for IF in $IFACES; do
 done
 unset IFS
 
+if [[ ! $DISABLED_OPTIMIZED_LOOP == y ]]; then
 # Make sure something is different than the last run (should always be the case, but...)
-if [[ -r $LAST_MARKER ]]; then
-    LAST_CONFIG="$(cat $LAST_MARKER)"
-    if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
-        ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
-        if [[ $ETHERNET_STATUS == inactive ]]; then
-            printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-            finish
-        fi
-    elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
-        printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-        finish
-    fi
+   if [[ -r $LAST_MARKER ]]; then
+       LAST_CONFIG="$(cat $LAST_MARKER)"
+       if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+           ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
+           if [[ $ETHERNET_STATUS == inactive ]]; then
+               printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+               finish
+           fi
+       elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
+           printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+           finish
+       fi
+   fi
+else
+  printf "Optimized test disabled (-o), checking further\n"
 fi
 
 

@@ -50,5 +50,7 @@
     <false/>
     <key>AbandonProcessGroup</key>
     <true/>
+    <key>RunAtLoad</key>
+    <true/>
 </dict>
 </plist>
