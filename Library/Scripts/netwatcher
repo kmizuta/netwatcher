@@ -34,7 +34,7 @@ CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/Mac
 #-------------------------------------------------------------------------------
 # Defaults
 DISABLED_OPTIMIZED_LOOP="n"
-THROTTLE=15
+THROTTLE=5
 
 #-------------------------------------------------------------------------------
 # Load user options to change code behaviour
