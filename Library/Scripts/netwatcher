@@ -29,11 +29,12 @@
 #-------------------------------------------------------------------------------
 # Constants
 CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/MacOS/Cisco AnyConnect VPN Client"
-    PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
+PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
 #-------------------------------------------------------------------------------
 # Defaults
 DISABLED_OPTIMIZED_LOOP="n"
+PAUSE_TO_SETTLE="n"
 THROTTLE=5
 
 #-------------------------------------------------------------------------------
@@ -175,12 +176,15 @@ EOF
 quit_program ()
 {
     local program="$1"
-    printf "Quitting $program\n"
-    /usr/bin/osascript <<EOF
+    local pid=$(ps -ef | grep "$program" | grep -v 'grep' | awk '{ print $2 }')
+    if [[ $pid =~ [0-9] ]]; then
+        printf "Quitting $program [pid: $pid]\n"
+        /usr/bin/osascript <<EOF
 tell application "$program"
      quit
 end tell
 EOF
+    fi
 }
 
 return_program_status ()
@@ -220,10 +224,12 @@ finish() {
 
 # If -t is passed as an option than set as throttle limit
 # If -o is passed as an option than avoid the no-action optimization
-while getopts ":t:o" OPTION; do
+while getopts ":t:op:" OPTION; do
      case $OPTION in
           t) THROTTLE=$OPTARG ;;
           o) DISABLED_OPTIMIZED_LOOP="y" ;;
+          p) PAUSE_TO_SETTLE="y"
+             PAUSE_TIME=$OPTARG ;;
           ?) ;;
      esac
 done
@@ -272,7 +278,7 @@ done
 unset IFS
 
 if [[ $DISABLED_OPTIMIZED_LOOP == n ]]; then
-# Make sure something is different than the last run (should always be the case, but...)
+   # Make sure something is different than the last run (should always be the case, but...)
    if [[ -r $LAST_MARKER ]]; then
        LAST_CONFIG="$(cat $LAST_MARKER)"
        if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
@@ -287,12 +293,14 @@ if [[ $DISABLED_OPTIMIZED_LOOP == n ]]; then
        fi
    fi
 else
-  printf "Optimized test disabled (-o), checking further\n"
+  printf "Optimized test disabled (-o), checking further...\n"
 fi
 
-
-#printf "Will probe for network changes in "
-#for (( count=5; count!=0; count-- )) { sleep 1 ; printf "$count "; }
+if [[ $PAUSE_TO_SETTLE == y ]]; then
+   printf "Pausing $PAUSE_TIME seconds to let interfaces settle... "
+   for (( count=$PAUSE_TIME; count!=0; count-- )) { sleep 1 ; printf "$count "; }
+   printf "\n"
+fi
 
 notify "Network configuration change" "Processing ruleset"
 
