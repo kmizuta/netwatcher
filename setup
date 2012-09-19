@@ -54,9 +54,9 @@ usage ()
      printf "Usage: $(basename $0) [-u] [-r] [-t secs] [-p secs] -o\n"
      printf "       -u Stop and uninstall\n"
      printf "       -r Reinstall (re-ask setup questions)\n"
-     printf "       -t Time (in seconds) that must pass between network changes for tem to be considered valid\n"
+     printf "       -t Time (in seconds) that must pass between network changes for them to be considered valid\n"
      printf "       -p Time (in seconds) to pause before evaluating a network change to allow interfaces to settle\n"
-     printf "       -o Disables checking that a network change event actually results in a different active interface and IP\n"
+     printf "       -o Disables optimization test (i.e. don't check if configd trigger was due to new interface/ip combo)\n"
      exit 0
 }
 
