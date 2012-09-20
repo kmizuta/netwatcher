@@ -339,7 +339,7 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
                 notify "Non-work location" "Ethernet IP: $IP Domain: $DOMAIN"
                 set_default_printer "$HOME_PRINTER"
                 CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-                printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+                printf "Cisco AnyConnect status: $CISCO_STATUS\n"
                 if [[ $CISCO_STATUS == inactive ]]; then
                     quit_program "Proxifier"
                 fi
@@ -399,7 +399,7 @@ if [[ -n $SSID ]]; then
                 start_proxifier
             fi
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            printf "Cisco AnyConnect status: $CISCO_STATUS\n"
             if [[ $CISCO_STATUS == inactive ]]; then
                 start_vpn $WIFI_IF
             fi
@@ -408,7 +408,7 @@ if [[ -n $SSID ]]; then
         elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
             notify "Home location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            printf "Cisco AnyConnect status: $CISCO_STATUS\n"
             if [[ $CISCO_STATUS == inactive ]]; then
                 quit_program "Proxifier"
             fi
@@ -417,7 +417,7 @@ if [[ -n $SSID ]]; then
         else
             notify "Non-work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf " Cisco Anyconnect status: $CISCO_STATUS\n"
+            printf "Cisco AnyConnect status: $CISCO_STATUS\n"
             if [[ $CISCO_STATUS == inactive ]]; then
                 quit_program "Proxifier"
             fi
