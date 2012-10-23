@@ -239,7 +239,7 @@ shift $((OPTIND-1))
 LOGFILE=$(defaults read /Users/$USER/Library/LaunchAgents/local.netwatcher | \
     awk -F\" '/StandardOutPath/ { print $2 }')
 LOGSIZE=$(/usr/bin/du -k $LOGFILE | awk '{print $1}')
-if ((LOGSIZE > 1024 )); then
+if ((LOGSIZE > 1024)); then
     : > $LOGFILE
     printf "$(date '+%b %d %H:%M:%S'): Purged $LOGFILE\n"
 fi
@@ -252,7 +252,7 @@ LAST_MARKER=~/.netwatcher_last
 if [[ -r $LAST_MARKER ]]; then
     NOW=$(date +%s)
     LAST_UPDATE=$(stat -f %m $LAST_MARKER)
-    if (( $((NOW - LAST_UPDATE)) < THROTTLE )); then
+    if (($((NOW - LAST_UPDATE)) < THROTTLE)); then
         printf "Ran less than $THROTTLE seconds ago, exiting.\n"
         finish
     fi
@@ -298,7 +298,7 @@ fi
 
 if [[ $PAUSE_TO_SETTLE == y ]]; then
    printf "Pausing $PAUSE_TIME seconds to let interfaces settle... "
-   for (( count=$PAUSE_TIME; count!=0; count-- )) { sleep 1 ; printf "$count "; }
+   for ((count=$PAUSE_TIME; count!=0; count--)) { sleep 1 ; printf "$count "; }
    printf "\n"
 fi
 
