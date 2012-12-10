@@ -236,7 +236,7 @@ done
 shift $((OPTIND-1))
 
 # Purge log if it is megabyte(s)
-LOGFILE=$(defaults read /Users/$USER/Library/LaunchAgents/local.netwatcher | \
+LOGFILE=$(defaults read ~/Library/LaunchAgents/local.netwatcher | \
     awk -F\" '/StandardOutPath/ { print $2 }')
 LOGSIZE=$(/usr/bin/du -k $LOGFILE | awk '{print $1}')
 if ((LOGSIZE > 1024)); then

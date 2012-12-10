@@ -187,7 +187,7 @@ launchctl load ~/Library/LaunchAgents/local.netwatcher.plist
 
 printf "Installation complete\n"
 printf "Use \"defaults read ~/Library/LaunchAgents/local.netwatcher.plist\" to see default plist values\n"
-printf "Use \"defaults write <key> <value> ~/Library/LaunchAgents/local.netwatcher.plist\" to change plist values\n"
+printf "Use \"defaults write ~/Library/LaunchAgents/local.netwatcher.plist <key> <value>\" to change plist values\n"
 printf "Do \"sudo touch /Library/Preferences/SystemConfiguration\" to test\n"
 
 exit 0
