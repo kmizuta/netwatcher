@@ -132,9 +132,13 @@ else
         printf "VPN_STATUS=\"On VPN\"\n" >> $RC_FILE
     fi
 
-    collect_response "Enter the name of your work printer or \"none\" to disable this feature" "XEROX WorkCentre 4250"
+    printf "The following printers are installed:\n\n"
+    lpstat -p | awk '/^printer/ { print $2 }'
+    printf "\n$(lpstat -d)\n\n"
+    DEFAULT_PRINTER=$(lpstat -d | awk '{ print $NF }')
+    collect_response "Enter the name of your work printer or \"none\" to disable this feature" "$DEFAULT_PRINTER"
     printf "WORK_PRINTER=\"$RESPONSE\"\n" >> $RC_FILE
-    collect_response "Enter the name of your home printer or \"none\" to disable this feature" "Canon MP560 series"
+    collect_response "Enter the name of your home printer or \"none\" to disable this feature" "$DEFAULT_PRINTER"
     printf "HOME_PRINTER=\"$RESPONSE\"\n" >> $RC_FILE
 
     printf "Do you want to enable Notification Center alerts? (Requires OSX >= 10.8)"

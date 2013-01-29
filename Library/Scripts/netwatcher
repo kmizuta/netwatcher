@@ -30,6 +30,14 @@
 # Constants
 CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/MacOS/Cisco AnyConnect VPN Client"
 PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
+# My ISP (Optimum) provides dynamic DNS for Boost+ customers. I want to start the ddnsd daemon provided by them
+# any time I connect to my home LAN. In this way I can access my Airport Extreme's shared disk via afp://
+# from anywhere on the internet using the hostname defined in my ddns config. There are many DDNS services
+# out there, many free; just replace these values as needed. If you don't use DDNS, no worries. This will have no
+# impact
+DDNS_EXE="/usr/local/bin/ddnsd"
+START_DDNS_CMD="${DDNS_EXE} --start"
+STOP_DDNS_CMD="${DDNS_EXE} --stop"
 
 #-------------------------------------------------------------------------------
 # Defaults
@@ -89,7 +97,7 @@ get_ssid ()
     local interface=$1
     local ssid="$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I |\
         awk -F': ' '/^.* SSID/ { print $2 }')"
-    printf $ssid
+    printf "$ssid"
 }
 
 start_vpn ()
@@ -136,6 +144,26 @@ start_proxifier()
     fi
 }
 
+start_ddns()
+{
+    if [[ -x "$DDNS_EXE" ]]; then
+        local pid=$(ps -e | grep -v 'grep' |  grep -o "$DDNS_EXE")
+        if [[ -z $pid ]]; then
+            $START_DDNS_CMD
+        fi
+    fi
+}
+
+stop_ddns()
+{
+    if [[ -x "$DDNS_EXE" ]]; then
+        local pid=$(ps -e | grep -v 'grep' |  grep -o "$DDNS_EXE")
+        if [[ -n $pid ]]; then
+            $STOP_DDNS_CMD
+        fi
+    fi
+}
+
 set_chat_status()
 {
     local status="$1"
@@ -155,21 +183,8 @@ set_default_printer()
 {
     local printer="$1"
     if [[ $printer != none ]] && [[ -n $printer ]]; then
-        /usr/bin/osascript <<EOF
-tell application "Printer Setup Utility"
-set the_printer to the current printer
-set the_name to the name of the_printer
-if the_name is not "$printer" then
-    set the_count to the count of printers
-    repeat with x from 1 to the_count
-        if the name of printer x is "$printer" then
-            set the current printer to printer x
-        end if
-    end repeat
-end if
-quit
-end tell
-EOF
+        printf "Setting default printer: ${printer}\n"
+        lpoptions -d $printer > /dev/null 2>&1
     fi
 }
 
@@ -189,8 +204,8 @@ EOF
 
 return_program_status ()
 {
-    local executable=$1
-    local status=$(ps -e | grep "$executable" | grep -v grep)
+    local program=$1
+    local status=$(ps -e | grep -v 'grep' |  grep -o "$program")
     if [[ $status == "" ]]; then
       printf "inactive"
     else
@@ -236,7 +251,7 @@ done
 shift $((OPTIND-1))
 
 # Purge log if it is megabyte(s)
-LOGFILE=$(defaults read ~/Library/LaunchAgents/local.netwatcher | \
+LOGFILE=$(defaults read /Users/$USER/Library/LaunchAgents/local.netwatcher | \
     awk -F\" '/StandardOutPath/ { print $2 }')
 LOGSIZE=$(/usr/bin/du -k $LOGFILE | awk '{print $1}')
 if ((LOGSIZE > 1024)); then
@@ -332,6 +347,7 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
             if [[ $IP =~ $WORK_IP_PATTERN ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
                 notify "Work location" "Ethernet IP: $IP Domain: $DOMAIN"
                 quit_program "Cisco AnyConnect VPN Client"
+                stop_ddns
                 start_proxifier
                 set_default_printer "$WORK_PRINTER"
                 set_chat_status "$WORK_STATUS"
@@ -343,6 +359,7 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
                 if [[ $CISCO_STATUS == inactive ]]; then
                     quit_program "Proxifier"
                 fi
+                start_ddns
             fi
             printf "On ethernet, turning off Wi-Fi... "
             turn_off_airport $WIFI_IF
@@ -403,6 +420,7 @@ if [[ -n $SSID ]]; then
             if [[ $CISCO_STATUS == inactive ]]; then
                 start_vpn $WIFI_IF
             fi
+            stop_ddns
             set_default_printer "$WORK_PRINTER"
             set_chat_status "$VPN_STATUS"
         elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
@@ -412,6 +430,7 @@ if [[ -n $SSID ]]; then
             if [[ $CISCO_STATUS == inactive ]]; then
                 quit_program "Proxifier"
             fi
+            start_ddns
             set_default_printer "$HOME_PRINTER"
             set_chat_status "$HOME_STATUS"
         else
@@ -421,6 +440,7 @@ if [[ -n $SSID ]]; then
             if [[ $CISCO_STATUS == inactive ]]; then
                 quit_program "Proxifier"
             fi
+            stop_ddns
         fi
     fi
 else
