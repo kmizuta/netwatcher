@@ -28,7 +28,7 @@
 #
 #-------------------------------------------------------------------------------
 # Constants
-CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect VPN Client.app/Contents/MacOS/Cisco AnyConnect VPN Client"
+CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app/Contents/MacOS/Cisco AnyConnect Secure Mobility Client"
 PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 # My ISP (Optimum) provides dynamic DNS for Boost+ customers. I want to start the ddnsd daemon provided by them
 # any time I connect to my home LAN. In this way I can access my Airport Extreme's shared disk via afp://
@@ -149,7 +149,8 @@ start_ddns()
     if [[ -x "$DDNS_EXE" ]]; then
         local pid=$(ps -e | grep -v 'grep' |  grep -o "$DDNS_EXE")
         if [[ -z $pid ]]; then
-            $START_DDNS_CMD
+            $START_DDNS_CMD > /dev/null
+            printf "Started Dyn DNS [pid $!]\n"
         fi
     fi
 }
@@ -159,7 +160,8 @@ stop_ddns()
     if [[ -x "$DDNS_EXE" ]]; then
         local pid=$(ps -e | grep -v 'grep' |  grep -o "$DDNS_EXE")
         if [[ -n $pid ]]; then
-            $STOP_DDNS_CMD
+            $STOP_DDNS_CMD > /dev/null
+            printf "Stopped Dyn DNS\n"
         fi
     fi
 }
@@ -410,15 +412,15 @@ if [[ -n $SSID ]]; then
         printf "SSID: $SSID\nIP: $IP\nDomain: $DOMAIN\n"
         if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
             notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-            PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
-            printf " Proxifier status: $PROXYF_STATUS\n"
-            if [[ $PROXYF_STATUS == inactive ]]; then
-                start_proxifier
-            fi
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
             printf "Cisco AnyConnect status: $CISCO_STATUS\n"
             if [[ $CISCO_STATUS == inactive ]]; then
                 start_vpn $WIFI_IF
+            fi
+            PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
+            printf "Proxifier status: $PROXYF_STATUS\n"
+            if [[ $PROXYF_STATUS == inactive ]]; then
+                start_proxifier
             fi
             stop_ddns
             set_default_printer "$WORK_PRINTER"
