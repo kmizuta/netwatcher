@@ -39,6 +39,10 @@ DDNS_EXE="/usr/local/bin/ddnsd"
 START_DDNS_CMD="${DDNS_EXE} --start"
 STOP_DDNS_CMD="${DDNS_EXE} --stop"
 
+# OpenDNS is useful for basic content filtering (at the expense of privacy, but is it any better with my ISP's DNS?)
+# We want to start the OpenDNS updater when at home, and stop it if on any other network
+OPENDNS_EXE="/Applications/OpenDNS Updater.app/Contents/MacOS/OpenDNS Updater"
+
 #-------------------------------------------------------------------------------
 # Defaults
 DISABLED_OPTIMIZED_LOOP="n"
@@ -147,10 +151,10 @@ start_proxifier()
 start_ddns()
 {
     if [[ -x "$DDNS_EXE" ]]; then
-        local pid=$(ps -e | grep -v 'grep' |  grep -o "$DDNS_EXE")
+       local pid=$(ps -e | grep -v 'grep' | grep "$DDNS_EXE" | awk '{ print $1 }')
         if [[ -z $pid ]]; then
             $START_DDNS_CMD > /dev/null
-            printf "Started Dyn DNS [pid $!]\n"
+            printf "Started Dyn DNS [pid: $(ps -e | grep -v 'grep' | grep "$DDNS_EXE" | awk '{ print $1 }')]\n"
         fi
     fi
 }
@@ -158,10 +162,32 @@ start_ddns()
 stop_ddns()
 {
     if [[ -x "$DDNS_EXE" ]]; then
-        local pid=$(ps -e | grep -v 'grep' |  grep -o "$DDNS_EXE")
+       local pid=$(ps -e | grep -v 'grep' | grep "$DDNS_EXE" | awk '{ print $1 }')
         if [[ -n $pid ]]; then
             $STOP_DDNS_CMD > /dev/null
             printf "Stopped Dyn DNS\n"
+        fi
+    fi
+}
+
+start_opendns()
+{
+    if [[ -x "$OPENDNS_EXE" ]]; then
+       local pid=$(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')
+        if [[ -z $pid ]]; then
+            exec "$OPENDNS_EXE" > /dev/null 2>&1 &
+            printf "Started OpenDNS [pid: $(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')]\n"
+        fi
+    fi
+}
+
+stop_opendns()
+{
+    if [[ -x "$OPENDNS_EXE" ]]; then
+       local pid=$(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')
+        if [[ -n $pid ]]; then
+            killall $(basename $OPENDNS_EXE) > /dev/null
+            printf "Stopped OpenDNS\n"
         fi
     fi
 }
@@ -278,15 +304,11 @@ fi
 # See which network interfaces we are able to monitor (we ignore
 # "Bluetooth Modem" by only matching devices that have "en" in their name)
 printf "Probing for [previously] configured interfaces...\n"
-IFACES="$(/usr/sbin/networksetup -listnetworkserviceorder \
-    | grep 'en.)' \
-    | sed -e s/^'(Hardware Port: '// \
-        -e s/', Device:'// \
-        -e s/')'//)"
+IFACES="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed -e s/^'(Hardware Port: '// -e s/\)$// | sort)"
 IFS=$(printf "\n\b")
 for IF in $IFACES; do
     printf "    $IF\n"
-    if [[ $IF =~ Ethernet ]]; then
+    if [[ $IF =~ Bridge ]] || [[ $IF =~ Ethernet ]]; then
         ETHERNET_IF=$(printf $IF | awk '{ print $NF }')
     elif [[ $IF =~ Wi-Fi ]]; then
         WIFI_IF=$(printf $IF | awk '{ print $NF }')
@@ -350,6 +372,7 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
                 notify "Work location" "Ethernet IP: $IP Domain: $DOMAIN"
                 quit_program "Cisco AnyConnect VPN Client"
                 stop_ddns
+                stop_opendns
                 start_proxifier
                 set_default_printer "$WORK_PRINTER"
                 set_chat_status "$WORK_STATUS"
@@ -362,6 +385,7 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
                     quit_program "Proxifier"
                 fi
                 start_ddns
+                start_opendns
             fi
             printf "On ethernet, turning off Wi-Fi... "
             turn_off_airport $WIFI_IF
@@ -414,15 +438,16 @@ if [[ -n $SSID ]]; then
             notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
             printf "Cisco AnyConnect status: $CISCO_STATUS\n"
-            if [[ $CISCO_STATUS == inactive ]]; then
-                start_vpn $WIFI_IF
-            fi
+            #if [[ $CISCO_STATUS == inactive ]]; then
+            #    start_vpn $WIFI_IF
+            #fi
             PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
             printf "Proxifier status: $PROXYF_STATUS\n"
             if [[ $PROXYF_STATUS == inactive ]]; then
                 start_proxifier
             fi
             stop_ddns
+            stop_opendns
             set_default_printer "$WORK_PRINTER"
             set_chat_status "$VPN_STATUS"
         elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
@@ -433,6 +458,7 @@ if [[ -n $SSID ]]; then
                 quit_program "Proxifier"
             fi
             start_ddns
+            start_opendns
             set_default_printer "$HOME_PRINTER"
             set_chat_status "$HOME_STATUS"
         else
@@ -443,6 +469,7 @@ if [[ -n $SSID ]]; then
                 quit_program "Proxifier"
             fi
             stop_ddns
+            stop_opendns
         fi
     fi
 else
