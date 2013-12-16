@@ -29,9 +29,10 @@ For example:
 	       -p Time (in seconds) to pause before evaluating a network change to allow interfaces to settle
 	       -o Disables optimization test (i.e. don't check if configd trigger was due to new interface/ip combo)
 	
-	./setup -r -t 0 -p 5       
-    Do you want to watch for wired ethernet connections? (y/n) y
-	Do you want to enable flight mode? (Turns off Wi-Fi if not connected) (y/n) nDo you want to change your status in Messages when your connection changes? (y/n) y
+	./setup -r -t 0 -p 5
+	Do you want to watch for wired ethernet connections? (y/n) y
+	Do you want to enable flight mode? (Turns off Wi-Fi if not connected) (y/n) n
+	Do you want to change your status in Messages when your connection changes? (y/n) y
 	Modify /Users/dfelicia/.netwatcherrc to change the status messages
 	Enter the name of your work printer or "none" to disable this feature
 	[ Enter = XEROX WorkCentre 4250 ]: 
