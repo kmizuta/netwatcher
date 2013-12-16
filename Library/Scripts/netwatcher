@@ -186,8 +186,8 @@ stop_opendns()
     if [[ -x "$OPENDNS_EXE" ]]; then
        local pid=$(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')
         if [[ -n $pid ]]; then
-            killall $(basename $OPENDNS_EXE) > /dev/null
-            printf "Stopped OpenDNS\n"
+            kill $pid > /dev/null
+            printf "Stopped OpenDNS [pid $pid]\n"
         fi
     fi
 }
