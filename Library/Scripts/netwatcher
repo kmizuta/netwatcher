@@ -438,9 +438,9 @@ if [[ -n $SSID ]]; then
             notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
             printf "Cisco AnyConnect status: $CISCO_STATUS\n"
-            #if [[ $CISCO_STATUS == inactive ]]; then
-            #    start_vpn $WIFI_IF
-            #fi
+            if [[ $CISCO_STATUS == inactive ]] && [[ $START_VPN =~ true ]]; then
+                start_vpn $WIFI_IF
+            fi
             PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
             printf "Proxifier status: $PROXYF_STATUS\n"
             if [[ $PROXYF_STATUS == inactive ]]; then

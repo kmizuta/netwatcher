@@ -51,12 +51,18 @@ uninstall ()
 
 usage ()
 {
-     printf "Usage: $(basename $0) [-u] [-r] [-t secs] [-p secs] -o\n"
-     printf "       -u Stop and uninstall\n"
-     printf "       -r Reinstall (re-ask setup questions)\n"
-     printf "       -t Time (in seconds) that must pass between network changes for them to be considered valid\n"
-     printf "       -p Time (in seconds) to pause before evaluating a network change to allow interfaces to settle\n"
-     printf "       -o Disables optimization test (i.e. don't check if configd trigger was due to new interface/ip combo)\n"
+    cat<<EOF
+Usage: $(basename $0) [-u] [-r] [-t secs] [-p secs] [-o]
+       -u Stop and uninstall
+       -r Reinstall (re-ask setup questions)
+       -t Time (in seconds) that must pass between network changes for them to be considered valid
+       -p Time (in seconds) to pause before evaluating a network change to allow interfaces to settle
+       -o Disables optimization test (i.e. don't check if configd trigger was due to new interface/ip combo -
+          if you don't understand this argument, you don't need to pass it)
+
+Example: $0 -t 5 -p 5
+
+EOF
      exit 0
 }
 
@@ -102,9 +108,9 @@ else
     touch $RC_FILE
 
     if [[ -x /Applications/Proxifier.app/Contents/MacOS/Proxifier ]]; then
-    printf "PROXIFIER=true\n" >> $RC_FILE
+        printf "PROXIFIER=true\n" >> $RC_FILE
     else
-    printf "PROXIFIER=false\n" >> $RC_FILE
+        printf "PROXIFIER=false\n" >> $RC_FILE
     fi
 
     printf "Do you want to watch for wired ethernet connections?"
@@ -127,12 +133,18 @@ else
     ask
     if [[ $ANSWER == y ]]; then
         printf "\nModify $RC_FILE to change the status messages\n\n"
-        printf "WORK_STATUS=\"In my office\"\n" >> $RC_FILE
+        printf "WORK_STATUS=\"In the office\"\n" >> $RC_FILE
         printf "HOME_STATUS=\"At home\"\n" >> $RC_FILE
         printf "VPN_STATUS=\"On VPN\"\n" >> $RC_FILE
     fi
+    
+    printf "Do you want to automatically start Cisco VPN when Wi-Fi connects to your work access point?"
+    ask
+    if [[ $ANSWER == y ]]; then
+        printf "START_VPN=true\n" >> $RC_FILE
+    fi
 
-    printf "The following printers are installed:\n\n"
+    printf "\nThe following printers are installed:\n\n"
     lpstat -p | awk '/^printer/ { print $2 }'
     printf "\n$(lpstat -d)\n\n"
     DEFAULT_PRINTER=$(lpstat -d | awk '{ print $NF }')
@@ -161,7 +173,7 @@ else
     collect_response "Enter the SSID for your home" "wrt"
     printf "HOME_SSID=\"$RESPONSE\"\n" >> $RC_FILE
 
-    collect_response "Enter the domain suffix pattern for your home" "internal"
+    collect_response "Enter the domain suffix pattern for your home" "local"
     printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
 fi
 
