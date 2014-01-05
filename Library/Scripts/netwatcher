@@ -30,6 +30,7 @@
 # Constants
 CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app/Contents/MacOS/Cisco AnyConnect Secure Mobility Client"
 PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
+VPN_IF="utun1"
 # My ISP (Optimum) provides dynamic DNS for Boost+ customers. I want to start the ddnsd daemon provided by them
 # any time I connect to my home LAN. In this way I can access my Airport Extreme's shared disk via afp://
 # from anywhere on the internet using the hostname defined in my ddns config. There are many DDNS services
@@ -104,6 +105,21 @@ get_ssid ()
     printf "$ssid"
 }
 
+quit_program ()
+{
+    local program="$1"
+    local pid=$(ps -ef | grep "$program" | grep -v 'grep' | awk '{ print $2 }')
+    if [[ $pid =~ [0-9] ]]; then
+        printf "Quitting $program [pid: $pid]\n"
+        /usr/bin/osascript <<EOF
+tell application "$program"
+     quit
+end tell
+EOF
+    fi
+}
+
+
 start_vpn ()
 {
     local interface=$1
@@ -113,7 +129,7 @@ start_vpn ()
         # Now wait for VPN authentication to complete
         ((count=0))
         while ((count != 16)); do
-            ifconfig -lu | grep -oq utun0
+            ifconfig -lu | grep -oq $VPN_IF
             if [[ $? == 0 ]]; then
                 break
             else
@@ -122,7 +138,7 @@ start_vpn ()
             fi
         done
         # VPN creates a tunnel interface, which momentarily causes the real interface to go down
-        # Wait for the real interface to get its ip back. Reason we don't block on getting a utun0
+        # Wait for the real interface to get its ip back. Reason we don't block on getting a utun
         # ip is that user could cancel VPN login process, forget password, etc. We want to exit this
         # script in a reasonable amount of time
         IP=$(/usr/sbin/ipconfig getifaddr $interface)
@@ -176,19 +192,24 @@ start_opendns()
        local pid=$(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')
         if [[ -z $pid ]]; then
             exec "$OPENDNS_EXE" > /dev/null 2>&1 &
-            printf "Started OpenDNS [pid: $(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')]\n"
+            printf "Started OpenDNS Updater [pid: $(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')]\n"
         fi
+    fi
+
+    if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
+        touch /Library/Application\ Support/DNSCrypt/control/dnscrypt
+        touch /Library/Application\ Support/DNSCrypt/control/fallback
+        printf "Enabled DNSCrypt\n"
     fi
 }
 
 stop_opendns()
 {
-    if [[ -x "$OPENDNS_EXE" ]]; then
-       local pid=$(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')
-        if [[ -n $pid ]]; then
-            kill $pid > /dev/null
-            printf "Stopped OpenDNS [pid $pid]\n"
-        fi
+    quit_program "OpenDNS Updater"
+
+    if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
+        rm -f /Library/Application\ Support/DNSCrypt/control/*
+        printf "Disabled DNSCrypt\n"
     fi
 }
 
@@ -216,19 +237,6 @@ set_default_printer()
     fi
 }
 
-quit_program ()
-{
-    local program="$1"
-    local pid=$(ps -ef | grep "$program" | grep -v 'grep' | awk '{ print $2 }')
-    if [[ $pid =~ [0-9] ]]; then
-        printf "Quitting $program [pid: $pid]\n"
-        /usr/bin/osascript <<EOF
-tell application "$program"
-     quit
-end tell
-EOF
-    fi
-}
 
 return_program_status ()
 {
@@ -301,8 +309,6 @@ if [[ -r $LAST_MARKER ]]; then
     fi
 fi
 
-# See which network interfaces we are able to monitor (we ignore
-# "Bluetooth Modem" by only matching devices that have "en" in their name)
 printf "Probing for [previously] configured interfaces...\n"
 IFACES="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed -e s/^'(Hardware Port: '// -e s/\)$// | sort)"
 IFS=$(printf "\n\b")
@@ -320,15 +326,22 @@ if [[ $DISABLED_OPTIMIZED_LOOP == n ]]; then
    # Make sure something is different than the last run (should always be the case, but...)
    if [[ -r $LAST_MARKER ]]; then
        LAST_CONFIG="$(cat $LAST_MARKER)"
-       if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
-           ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
-           if [[ $ETHERNET_STATUS == inactive ]]; then
+       if ifconfig -lu | grep -oq $VPN_IF; then
+           if [[ "$LAST_CONFIG" == "$VPN_IF $(/sbin/ifconfig $VPN_IF | grep 'inet ' | awk '{ print $2 }')" ]]; then
                printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
                finish
            fi
-       elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
-           printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-           finish
+       else
+           if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+               ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
+               if [[ $ETHERNET_STATUS == inactive ]]; then
+                   printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+                   finish
+               fi
+           elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
+               printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+               finish
+           fi
        fi
    fi
 else
@@ -342,6 +355,23 @@ if [[ $PAUSE_TO_SETTLE == y ]]; then
 fi
 
 notify "Network configuration change" "Processing ruleset"
+
+# VPN trumps everything
+VPN_IP=$(/sbin/ifconfig $VPN_IF 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
+if [[ $VPN_IP =~ [1-9] ]]; then
+    printf "VPN: Connection Established\nIP: $VPN_IP\n"
+    notify "VPN: Connection Established\nIP: $VPN_IP\n"
+    PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
+        printf "Proxifier status: $PROXYF_STATUS\n"
+        if [[ $PROXYF_STATUS == inactive ]]; then
+            start_proxifier
+        fi
+        stop_ddns
+        stop_opendns
+        set_default_printer "$WORK_PRINTER"
+        set_chat_status "$VPN_STATUS"
+        finish "$VPN_IF" "$VPN_IP"
+fi
 
 # Ethernet trumps Wi-Fi no matter what
 if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
@@ -421,9 +451,11 @@ if [[ $WIFI_STATUS == inactive ]]; then
     finish restart
 fi
 
-# TODO (?) - aceept a hash of known SSIDs and their respective prefs, then
-# act accordingly. Too much work for me, as I see no action necessary
-# for a public hotspot beyond killing off Proxifier, and the else clause
+
+
+# TODO (?) - accept a hash of known SSIDs and their respective prefs, then
+# act accordingly. Too much work for me as I see no action necessary
+# for a public hotspot beyond killing off Proxifier and the else clause
 # below does that
 
 # Okey dokey. By now we should have associated with a Wi-Fi network
@@ -449,7 +481,7 @@ if [[ -n $SSID ]]; then
             stop_ddns
             stop_opendns
             set_default_printer "$WORK_PRINTER"
-            set_chat_status "$VPN_STATUS"
+            set_chat_status "$WORK_STATUS"
         elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
             notify "Home location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
             CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
