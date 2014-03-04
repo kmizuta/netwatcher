@@ -111,11 +111,9 @@ quit_program ()
     local pid=$(ps -ef | grep "$program" | grep -v 'grep' | awk '{ print $2 }')
     if [[ $pid =~ [0-9] ]]; then
         printf "Quitting $program [pid: $pid]\n"
-        /usr/bin/osascript <<EOF
-tell application "$program"
-     quit
-end tell
-EOF
+        kill $pid > /dev/null 2>&1
+        sleep 1
+        kill -9 $pid > /dev/null 2>&1
     fi
 }
 
@@ -208,7 +206,7 @@ stop_opendns()
     quit_program "OpenDNS Updater"
 
     if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
-        rm -f /Library/Application\ Support/DNSCrypt/control/*
+        rm -f /Library/Application\ Support/DNSCrypt/control/dnscrypt
         printf "Disabled DNSCrypt\n"
     fi
 }
@@ -475,7 +473,7 @@ if [[ -n $SSID ]]; then
             fi
             PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
             printf "Proxifier status: $PROXYF_STATUS\n"
-            if [[ $PROXYF_STATUS == inactive ]]; then
+            if [[ $PROXYF_STATUS == inactive ]] && [[ $START_VPN =~ true ]]; then
                 start_proxifier
             fi
             stop_ddns
