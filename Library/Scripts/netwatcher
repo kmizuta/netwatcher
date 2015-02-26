@@ -30,7 +30,7 @@
 # Constants
 CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app/Contents/MacOS/Cisco AnyConnect Secure Mobility Client"
 PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
-VPN_IF="utun1"
+
 # My ISP (Optimum) provides dynamic DNS for Boost+ customers. I want to start the ddnsd daemon provided by them
 # any time I connect to my home LAN. In this way I can access my Airport Extreme's shared disk via afp://
 # from anywhere on the internet using the hostname defined in my ddns config. There are many DDNS services
@@ -120,7 +120,6 @@ quit_program ()
         kill -9 $pid > /dev/null 2>&1
     fi
 }
-
 
 start_vpn ()
 {
@@ -242,6 +241,13 @@ set_chat_status()
     local status="$1"
     if [[ $status != none ]] && [[ -n $status ]]; then
         killall Messages
+        if [[ $status == Offline ]]; then
+        /usr/bin/osascript <<EOF
+tell application "Messages"
+set status to offline
+end tell
+EOF
+        else
         /usr/bin/osascript <<EOF
 tell application "Messages"
 log in
@@ -249,6 +255,7 @@ set status to available
 set the status message to "$status"
 end tell
 EOF
+        fi
     fi
 }
 
@@ -261,15 +268,14 @@ set_default_printer()
     fi
 }
 
-
 return_program_status ()
 {
     local program=$1
     local status=$(ps -e | grep -v 'grep' |  grep -o "$program")
     if [[ $status == "" ]]; then
-      printf "inactive"
+        printf "inactive"
     else
-      printf "active"
+        printf "active"
     fi
 }
 
@@ -300,13 +306,13 @@ finish() {
 # If -t is passed as an option than set as throttle limit
 # If -o is passed as an option than avoid the no-action optimization
 while getopts ":t:op:" OPTION; do
-     case $OPTION in
-          t) THROTTLE=$OPTARG ;;
-          o) DISABLED_OPTIMIZED_LOOP="y" ;;
-          p) PAUSE_TO_SETTLE="y"
-             PAUSE_TIME=$OPTARG ;;
-          ?) ;;
-     esac
+    case $OPTION in
+        t) THROTTLE=$OPTARG ;;
+        o) DISABLED_OPTIMIZED_LOOP="y" ;;
+        p) PAUSE_TO_SETTLE="y"
+           PAUSE_TIME=$OPTARG ;;
+        ?) ;;
+    esac
 done
 shift $((OPTIND-1))
 
@@ -338,7 +344,9 @@ IFACES="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed 
 IFS=$(printf "\n\b")
 for IF in $IFACES; do
     printf "    $IF\n"
-    if [[ $IF =~ Bridge ]] || [[ $IF =~ Ethernet ]]; then
+    if [[ $IF =~ Bridge ]]; then
+        BRIDGE_IF=$(printf $IF | awk '{ print $NF }')
+    elif [[ $IF =~ Ethernet ]]; then
         ETHERNET_IF=$(printf $IF | awk '{ print $NF }')
     elif [[ $IF =~ Wi-Fi ]]; then
         WIFI_IF=$(printf $IF | awk '{ print $NF }')
@@ -346,30 +354,54 @@ for IF in $IFACES; do
 done
 unset IFS
 
+# If we have an active bridge it trumps ethnernet interface
+BRIDGE_STATUS=$(return_interface_status $BRIDGE_IF)
+if [[ $BRIDGE_STATUS == active ]]; then
+    $ETHERNET_IF=$BRIDGE_IF
+fi
+
+# See if we have an active VPN connection
+printf "Probing for actively tunneled connections...\n"
+((COUNT=0))
+for UTUN_IF in $(ifconfig | grep -o '^utun[0-9].*:' | sed 's/://'); do
+    VPN_IP=$(/sbin/ifconfig $UTUN_IF 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
+    if [[ $VPN_IP =~ [1-9] ]]; then
+        printf "    $UTUN_IF: $VPN_IP\n"
+        VPN_IF=$UTUN_IF
+        ((COUNT=COUNT+1))
+    fi
+done
+
+if (( COUNT > 1 )); then
+    printf "More than one utun interface with an IP. This is unexpected! Using $VPN_IF\n"
+elif (( COUNT == 0 )); then
+    VPN_IF=null
+fi
+
 if [[ $DISABLED_OPTIMIZED_LOOP == n ]]; then
-   # Make sure something is different than the last run (should always be the case, but...)
-   if [[ -r $LAST_MARKER ]]; then
-       LAST_CONFIG="$(cat $LAST_MARKER)"
-       if ifconfig -lu | grep -oq $VPN_IF; then
-           if [[ "$LAST_CONFIG" == "$VPN_IF $(/sbin/ifconfig $VPN_IF | grep 'inet ' | awk '{ print $2 }')" ]]; then
-               printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-               finish
-           fi
-       else
-           if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
-               ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
-               if [[ $ETHERNET_STATUS == inactive ]]; then
-                   printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-                   finish
-               fi
-           elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
-               printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
-               finish
-           fi
-       fi
-   fi
+    # Make sure something is different than the last run (should always be the case, but...)
+    if [[ -r $LAST_MARKER ]]; then
+        LAST_CONFIG="$(cat $LAST_MARKER)"
+        if ifconfig -lu | grep -oq $VPN_IF; then
+            if [[ "$LAST_CONFIG" == "$VPN_IF $(/sbin/ifconfig $VPN_IF | grep 'inet ' | awk '{ print $2 }')" ]]; then
+                printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+                finish
+            fi
+        else
+            if [[ "$LAST_CONFIG" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
+                ETHERNET_STATUS=$(return_interface_status $ETHERNET_IF)
+                if [[ $ETHERNET_STATUS == inactive ]]; then
+                    printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+                    finish
+                fi
+            elif [[ "$LAST_CONFIG" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
+                printf "Nothing has changed. The active network is still: $LAST_CONFIG\n"
+                finish
+            fi
+        fi
+    fi
 else
-  printf "Optimized test disabled (-o), checking further...\n"
+    printf "Optimized test disabled (-o), checking further...\n"
 fi
 
 if [[ $PAUSE_TO_SETTLE == y ]]; then
@@ -392,12 +424,14 @@ if [[ $VPN_IP =~ [1-9] ]]; then
         fi
         stop_ddns
         stop_opendns
-		  quit_program "Dropbox"
-		  quit_program "owncloud"
+        quit_program "Dropbox"
+        quit_program "owncloud"
         set_default_printer "$WORK_PRINTER"
         set_chat_status "$VPN_STATUS"
         finish "$VPN_IF" "$VPN_IP"
+        break
 fi
+
 
 # Ethernet trumps Wi-Fi no matter what
 if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
@@ -429,8 +463,8 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
                 quit_program "Cisco AnyConnect VPN Client"
                 stop_ddns
                 stop_opendns
-	 				 quit_program "Dropbox"
-	 				 quit_program "owncloud"
+                     quit_program "Dropbox"
+                     quit_program "owncloud"
                 start_proxifier
                 set_default_printer "$WORK_PRINTER"
                 set_chat_status "$WORK_STATUS"
@@ -444,8 +478,8 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
                 fi
                 start_ddns
                 start_opendns
-					 start_dropbox
-					 start_owncloud
+                     start_dropbox
+                     start_owncloud
             fi
             printf "On ethernet, turning off Wi-Fi... "
             turn_off_airport $WIFI_IF
@@ -481,8 +515,6 @@ if [[ $WIFI_STATUS == inactive ]]; then
     finish restart
 fi
 
-
-
 # TODO (?) - accept a hash of known SSIDs and their respective prefs, then
 # act accordingly. Too much work for me as I see no action necessary
 # for a public hotspot beyond killing off Proxifier and the else clause
@@ -510,8 +542,8 @@ if [[ -n $SSID ]]; then
             fi
             stop_ddns
             stop_opendns
-				quit_program "Dropbox"
-				quit_program "owncloud"
+                quit_program "Dropbox"
+                quit_program "owncloud"
             set_default_printer "$WORK_PRINTER"
             set_chat_status "$WORK_STATUS"
         elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
@@ -523,8 +555,8 @@ if [[ -n $SSID ]]; then
             fi
             start_ddns
             start_opendns
-			   start_dropbox
-			   start_owncloud
+               start_dropbox
+               start_owncloud
             set_default_printer "$HOME_PRINTER"
             set_chat_status "$HOME_STATUS"
         else
@@ -536,8 +568,8 @@ if [[ -n $SSID ]]; then
             fi
             stop_ddns
             stop_opendns
-				quit_program "Dropbox"
-				quit_program "owncloud"
+                quit_program "Dropbox"
+                quit_program "owncloud"
         fi
     fi
 else
