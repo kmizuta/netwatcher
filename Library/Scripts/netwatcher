@@ -28,17 +28,11 @@
 #
 #-------------------------------------------------------------------------------
 # Constants
+# VPN
 CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app/Contents/MacOS/Cisco AnyConnect Secure Mobility Client"
-PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
-# My ISP (Optimum) provides dynamic DNS for Boost+ customers. I want to start the ddnsd daemon provided by them
-# any time I connect to my home LAN. In this way I can access my Airport Extreme's shared disk via afp://
-# from anywhere on the internet using the hostname defined in my ddns config. There are many DDNS services
-# out there, many free; just replace these values as needed. If you don't use DDNS, no worries. This will have no
-# impact
-DDNS_EXE="/usr/local/bin/ddnsd"
-START_DDNS_CMD="${DDNS_EXE} --start"
-STOP_DDNS_CMD="${DDNS_EXE} --stop"
+# Proxifier - make other programs pass through a proxy server by intercepting and modifying their network requests
+PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
 # OpenDNS is useful for basic content filtering (at the expense of privacy, but is it any better with my ISP's DNS?)
 # We want to start the OpenDNS updater when at home, and stop it if on any other network
@@ -109,6 +103,17 @@ get_ssid ()
     printf "$ssid"
 }
 
+return_program_status ()
+{
+    local program=$1
+    local status=$(ps -e | grep -v 'grep' |  grep -o "$program")
+    if [[ $status == "" ]]; then
+        printf "inactive"
+    else
+        printf "active"
+    fi
+}
+
 quit_program ()
 {
     local program="$1"
@@ -118,121 +123,6 @@ quit_program ()
         kill $pid > /dev/null 2>&1
         sleep 1
         kill -9 $pid > /dev/null 2>&1
-    fi
-}
-
-start_vpn ()
-{
-    local interface=$1
-    if [[ -x "$CISCO_ANYC_EXE" ]]; then
-        nohup "$CISCO_ANYC_EXE" > /dev/null 2>&1 &
-        printf "Started Cisco AnyConnect VPN Client [ pid $! ]\nWaiting for user to establish the VPN connection.\n"
-        # Now wait for VPN authentication to complete
-        ((count=0))
-        while ((count != 16)); do
-            ifconfig -lu | grep -oq $VPN_IF
-            if [[ $? == 0 ]]; then
-                break
-            else
-                sleep 1.5
-                ((count++))
-            fi
-        done
-        # VPN creates a tunnel interface, which momentarily causes the real interface to go down
-        # Wait for the real interface to get its ip back. Reason we don't block on getting a utun
-        # ip is that user could cancel VPN login process, forget password, etc. We want to exit this
-        # script in a reasonable amount of time
-        IP=$(/usr/sbin/ipconfig getifaddr $interface)
-        ((count=0))
-        while [[ ! $IP =~ [1-9] ]] && ((count != 15)); do
-            sleep 1
-            IP=$(/usr/sbin/ipconfig getifaddr $interface)
-            ((count++))
-        done
-    fi
-}
-
-start_proxifier()
-{
-    if [[ ! $PROXIFIER == false ]]; then
-        if [[ -x "$PROXYF_EXE" ]]; then
-            local pid=$(/bin/ps -f -U $USER | grep 'Proxifier' | grep -v 'grep')
-            if [[ -z $pid ]]; then
-                nohup "$PROXYF_EXE" -SettingsShowMainWindow 0 > /dev/null 2>&1 &
-                printf "Started Proxifier [ pid $! ]\n"
-            fi
-        fi
-    fi
-}
-
-start_ddns()
-{
-    if [[ -x "$DDNS_EXE" ]]; then
-       local pid=$(ps -e | grep -v 'grep' | grep "$DDNS_EXE" | awk '{ print $1 }')
-        if [[ -z $pid ]]; then
-            $START_DDNS_CMD > /dev/null
-            printf "Started Dyn DNS [ pid: $(ps -e | grep -v 'grep' | grep "$DDNS_EXE" | awk '{ print $1 }') ]\n"
-        fi
-    fi
-}
-
-stop_ddns()
-{
-    if [[ -x "$DDNS_EXE" ]]; then
-       local pid=$(ps -e | grep -v 'grep' | grep "$DDNS_EXE" | awk '{ print $1 }')
-        if [[ -n $pid ]]; then
-            $STOP_DDNS_CMD > /dev/null
-            printf "Stopped Dyn DNS\n"
-        fi
-    fi
-}
-
-start_opendns()
-{
-    if [[ -x "$OPENDNS_EXE" ]]; then
-       local pid=$(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }')
-        if [[ -z $pid ]]; then
-            exec "$OPENDNS_EXE" > /dev/null 2>&1 &
-            printf "Started OpenDNS Updater [ pid: $(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }') ]\n"
-        fi
-    fi
-
-    if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
-        touch /Library/Application\ Support/DNSCrypt/control/dnscrypt
-        touch /Library/Application\ Support/DNSCrypt/control/fallback
-        printf "Enabled DNSCrypt\n"
-    fi
-}
-
-stop_opendns()
-{
-    quit_program "OpenDNS Updater"
-
-    if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
-        rm -f /Library/Application\ Support/DNSCrypt/control/dnscrypt
-        printf "Disabled DNSCrypt\n"
-    fi
-}
-
-start_dropbox()
-{
-    if [[ -x "$DROPBOX_EXE" ]]; then
-       local pid=$(ps -e | grep -v 'grep' | grep "$DROPBOX_EXE" | awk '{ print $1 }')
-        if [[ -z $pid ]]; then
-            nohup $DROPBOX_EXE > /dev/null 2>&1 &
-            printf "Started Dropbox [ pid: $(ps -e | grep -v 'grep' | grep "$DROPBOX_EXE" | awk '{ print $1 }') ]\n"
-        fi
-    fi
-}
-
-start_owncloud()
-{
-    if [[ -x "$OWNCLOUD_EXE" ]]; then
-       local pid=$(ps -e | grep -v 'grep' | grep "$OWNCLOUD_EXE" | awk '{ print $1 }')
-        if [[ -z $pid ]]; then
-            nohup $OWNCLOUD_EXE > /dev/null 2>&1 &
-            printf "Started Owncloud [ pid: $(ps -e | grep -v 'grep' | grep "$OWNCLOUD_EXE" | awk '{ print $1 }') ]\n"
-        fi
     fi
 }
 
@@ -268,15 +158,77 @@ set_default_printer()
     fi
 }
 
-return_program_status ()
+at_work()
 {
-    local program=$1
-    local status=$(ps -e | grep -v 'grep' |  grep -o "$program")
-    if [[ $status == "" ]]; then
-        printf "inactive"
-    else
-        printf "active"
-    fi
+	quit_program $(echo $DROPBOX_EXE | awk -F/ '{ print $NF }')
+	quit_program $(echo $OWNCLOUD_EXE | awk -F/ '{ print $NF }')
+	quit_program $(echo $OPENDNS_EXE | awk -F/ '{ print $NF }')
+	
+   if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
+       rm -f /Library/Application\ Support/DNSCrypt/control/dnscrypt
+       printf "Disabled DNSCrypt\n"
+   fi
+	
+	PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
+	printf "Proxifier status: $PROXYF_STATUS\n"
+	if [[ $PROXYF_STATUS == inactive ]]; then
+		if [[ ! $PROXIFIER == false ]]; then
+			nohup "$PROXYF_EXE" -SettingsShowMainWindow 0 > /dev/null 2>&1 &
+			printf "Started Proxifier [ pid $! ]\n"
+		fi
+	fi
+	
+   # Yosemite discoveryd needs a kick in the butt
+   [[ -f /usr/local/etc/oracle.com ]] && sudo cp /usr/local/etc/oracle.com /etc/resolver
+	[[ -f /usr/local/etc/oraclecorp.com ]] && sudo cp /usr/local/etc/oraclecorp.com /etc/resolver
+   [[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -force
+	  
+	set_default_printer "$WORK_PRINTER"
+	set_chat_status "$VPN_STATUS"
+}
+
+at_home()
+{
+	quit_program $(echo $CISCO_ANYC_EXE | awk -F/ '{ print $NF }')
+	quit_program $(echo $PROXYF_EXE | awk -F/ '{ print $NF }')
+	
+	# OpenDNS
+   if [[ -x "$OPENDNS_EXE" ]]; then
+   	if [[ $(return_program_status "$OPENDNS_EXE") == inactive ]]; then
+          exec "$OPENDNS_EXE" > /dev/null 2>&1 &
+          printf "Started OpenDNS Updater [ pid: $(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }') ]\n"
+      fi
+   fi
+
+   if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
+       touch /Library/Application\ Support/DNSCrypt/control/dnscrypt
+       touch /Library/Application\ Support/DNSCrypt/control/fallback
+       printf "Enabled DNSCrypt\n"
+   fi
+	
+	# DropBox
+   if [[ -x "$DROPBOX_EXE" ]]; then
+		if [[ $(return_program_status "$DROPBOX_EXE") == inactive ]]; then
+			nohup $DROPBOX_EXE > /dev/null 2>&1 &
+         printf "Started Dropbox [ pid: $(ps -e | grep -v 'grep' | grep "$DROPBOX_EXE" | awk '{ print $1 }') ]\n"
+      fi
+   fi
+	
+	# ownCloud
+   if [[ -x "$OWNCLOUD_EXE" ]]; then
+      if [[ $(return_program_status "$OWNCLOUD_EXE") == inactive ]]; then
+			nohup $OWNCLOUD_EXE > /dev/null 2>&1 &
+         printf "Started Owncloud [ pid: $(ps -e | grep -v 'grep' | grep "$OWNCLOUD_EXE" | awk '{ print $1 }') ]\n"
+		fi
+   fi
+	
+   # Yosemite discoveryd needs a kick in the butt
+   [[ -f /etc/resolver/oracle.com ]] && sudo rm /etc/resolver/oracle.com
+	[[ -f /etc/resolver/oraclecorp.com ]] && sudo rm /etc/resolver/oraclecorp.com
+   [[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -force
+	
+   set_default_printer "$HOME_PRINTER"
+   set_chat_status "$HOME_STATUS"
 }
 
 print_break () {
@@ -415,21 +367,11 @@ notify "Network configuration change" "Processing ruleset"
 # VPN trumps everything
 VPN_IP=$(/sbin/ifconfig $VPN_IF 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
 if [[ $VPN_IP =~ [1-9] ]]; then
-    printf "VPN: Connection Established\nIP: $VPN_IP\n"
-    notify "VPN: Connection Established\nIP: $VPN_IP\n"
-    PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
-        printf "Proxifier status: $PROXYF_STATUS\n"
-        if [[ $PROXYF_STATUS == inactive ]]; then
-            start_proxifier
-        fi
-        stop_ddns
-        stop_opendns
-        quit_program "Dropbox"
-        quit_program "owncloud"
-        set_default_printer "$WORK_PRINTER"
-        set_chat_status "$VPN_STATUS"
-        finish "$VPN_IF" "$VPN_IP"
-        break
+		printf "VPN: Connection Established\nIP: $VPN_IP\n"
+		notify "VPN: Connection Established\nIP: $VPN_IP\n"
+		at_work
+		finish "$VPN_IF" "$VPN_IP"
+		break
 fi
 
 
@@ -460,26 +402,10 @@ if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
             printf "\n    IP: $IP DOMAIN: $DOMAIN\n"
             if [[ $IP =~ $WORK_IP_PATTERN ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
                 notify "Work location" "Ethernet IP: $IP Domain: $DOMAIN"
-                quit_program "Cisco AnyConnect VPN Client"
-                stop_ddns
-                stop_opendns
-                     quit_program "Dropbox"
-                     quit_program "owncloud"
-                start_proxifier
-                set_default_printer "$WORK_PRINTER"
-                set_chat_status "$WORK_STATUS"
+                at_work
             else
                 notify "Non-work location" "Ethernet IP: $IP Domain: $DOMAIN"
-                set_default_printer "$HOME_PRINTER"
-                CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-                printf "Cisco AnyConnect status: $CISCO_STATUS\n"
-                if [[ $CISCO_STATUS == inactive ]]; then
-                    quit_program "Proxifier"
-                fi
-                start_ddns
-                start_opendns
-                     start_dropbox
-                     start_owncloud
+                at_home
             fi
             printf "On ethernet, turning off Wi-Fi... "
             turn_off_airport $WIFI_IF
@@ -530,46 +456,14 @@ if [[ -n $SSID ]]; then
         printf "SSID: $SSID\nIP: $IP\nDomain: $DOMAIN\n"
         if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
             notify "Work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf "Cisco AnyConnect status: $CISCO_STATUS\n"
-            if [[ $CISCO_STATUS == inactive ]] && [[ $START_VPN =~ true ]]; then
-                start_vpn $WIFI_IF
-            fi
-            PROXYF_STATUS=$(return_program_status "$PROXYF_EXE")
-            printf "Proxifier status: $PROXYF_STATUS\n"
-            if [[ $PROXYF_STATUS == inactive ]] && [[ $START_VPN =~ true ]]; then
-                start_proxifier
-            fi
-            stop_ddns
-            stop_opendns
-                quit_program "Dropbox"
-                quit_program "owncloud"
-            set_default_printer "$WORK_PRINTER"
-            set_chat_status "$WORK_STATUS"
+            at_work
         elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
             notify "Home location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf "Cisco AnyConnect status: $CISCO_STATUS\n"
-            if [[ $CISCO_STATUS == inactive ]]; then
-                quit_program "Proxifier"
-            fi
-            start_ddns
-            start_opendns
-               start_dropbox
-               start_owncloud
-            set_default_printer "$HOME_PRINTER"
-            set_chat_status "$HOME_STATUS"
+            at_home
         else
-            notify "Non-work location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
-            CISCO_STATUS=$(return_program_status "$CISCO_ANYC_EXE")
-            printf "Cisco AnyConnect status: $CISCO_STATUS\n"
-            if [[ $CISCO_STATUS == inactive ]]; then
-                quit_program "Proxifier"
-            fi
-            stop_ddns
-            stop_opendns
-                quit_program "Dropbox"
-                quit_program "owncloud"
+            notify "Unknown location" "SSID: $SSID IP: $IP Domain: $DOMAIN"
+				quit_program "Cisco AnyConnect Secure Mobility Client"
+				quit_program "Proxifier"
         fi
     fi
 else

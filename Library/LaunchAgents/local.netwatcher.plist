@@ -2,55 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key>
-    <string>local.netwatcher</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/dfelicia/Library/Scripts/netwatcher</string>
-        <string>-t 0</string>
-    </array>
-    <!--
-        Watching SystemConfiguration dir is not perfect as we seem
-        to get two spurious triggers with each network change, but
-        we handle those in the netwatcher script
-    -->
-    <key>WatchPaths</key>
-    <array>
-       <string>/Library/Preferences/SystemConfiguration</string>
-    </array>
-    <!--
-         This is an interesting idea, but it triggers every
-         few seconds. Wonder if there is a way to refine it?
-         Commenting for now, as watching SystemConfiguration
-         yields fewer spurious trigger events, though it's not
-         perfect.
-    -->
-    <!--key>LaunchEvents</key>
-    <dict>
-        <key>com.apple.notifyd.matching</key>
-        <dict>
-            <key>com.apple.system.config.network_change</key>
-            <dict>
-                <key>Notification</key>
-                <string>com.apple.system.config.network_change</string>
-            </dict>
-        </dict>
-    </dict-->
-    <key>StandardOutPath</key>
-    <string>/Users/dfelicia/Library/logs/netwatcher.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/dfelicia/Library/logs/netwatcher.log</string>
-    <key>Debug</key>
-    <false/>
-    <!--
-         Seems we need these to keep Proxifier and VPN
-         from being killed off
-    -->
-    <key>KeepAlive</key>
-    <false/>
-    <key>AbandonProcessGroup</key>
-    <true/>
-    <key>RunAtLoad</key>
-    <true/>
+	<key>AbandonProcessGroup</key>
+	<true/>
+	<key>Debug</key>
+	<false/>
+	<key>KeepAlive</key>
+	<false/>
+	<key>Label</key>
+	<string>local.netwatcher</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/dfelicia/Library/Scripts/netwatcher</string>
+		<string>-t5</string>
+		<string>-p3</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/dfelicia/Library/Logs/netwatcher.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/dfelicia/Library/Logs/netwatcher.log</string>
+	<key>WatchPaths</key>
+	<array>
+      <string>/var/run/resolv.conf</string>
+	</array>
 </dict>
 </plist>
