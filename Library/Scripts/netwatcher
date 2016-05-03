@@ -34,13 +34,12 @@ CISCO_ANYC_EXE="/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app/
 # Proxifier - make other programs pass through a proxy server by intercepting and modifying their network requests
 PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
-# OpenDNS is useful for basic content filtering (at the expense of privacy, but is it any better with my ISP's DNS?)
-# We want to start the OpenDNS updater when at home, and stop it if on any other network
-OPENDNS_EXE="/Applications/OpenDNS Updater.app/Contents/MacOS/OpenDNS Updater"
-
 # Cloud sharing services are prohibited by corporate policy
 DROPBOX_EXE="/Applications/Dropbox.app/Contents/MacOS/Dropbox"
 OWNCLOUD_EXE="/Applications/owncloud.app/Contents/MacOS/owncloud"
+
+# Oracle Documents Cloud
+ORADOCS_EXE="/Applications/Oracle Documents.app/Contents/MacOS/JavaAppLauncher"
 
 #-------------------------------------------------------------------------------
 # Defaults
@@ -162,7 +161,6 @@ at_work()
 {
 	quit_program $(echo $DROPBOX_EXE | awk -F/ '{ print $NF }')
 	quit_program $(echo $OWNCLOUD_EXE | awk -F/ '{ print $NF }')
-	quit_program $(echo $OPENDNS_EXE | awk -F/ '{ print $NF }')
 	
    if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
        rm -f /Library/Application\ Support/DNSCrypt/control/dnscrypt
@@ -178,10 +176,19 @@ at_work()
 		fi
 	fi
 	
+	ORADOCS_STATUS=$(return_program_status "$ORADOCS_EXE")
+	printf "Oracle Documents status: $ORADOCS_STATUS\n"
+	if [[ $ORADOCS_STATUS == inactive ]]; then
+		nohup "$ORADOCS_EXE" > /dev/null 2>&1 &
+		printf "Started Oracle Documents [ pid $! ]\n"
+	fi
+	
    # Yosemite discoveryd needs a kick in the butt
    [[ -f /usr/local/etc/oracle.com ]] && sudo cp /usr/local/etc/oracle.com /etc/resolver
 	[[ -f /usr/local/etc/oraclecorp.com ]] && sudo cp /usr/local/etc/oraclecorp.com /etc/resolver
-   [[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -force
+   #[[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -f
+   
+   sudo systemsetup -setnetworktimeserver 10.146.248.1
 	  
 	set_default_printer "$WORK_PRINTER"
 	set_chat_status "$VPN_STATUS"
@@ -191,20 +198,7 @@ at_home()
 {
 	quit_program $(echo $CISCO_ANYC_EXE | awk -F/ '{ print $NF }')
 	quit_program $(echo $PROXYF_EXE | awk -F/ '{ print $NF }')
-	
-	# OpenDNS
-   if [[ -x "$OPENDNS_EXE" ]]; then
-   	if [[ $(return_program_status "$OPENDNS_EXE") == inactive ]]; then
-          exec "$OPENDNS_EXE" > /dev/null 2>&1 &
-          printf "Started OpenDNS Updater [ pid: $(ps -e | grep -v 'grep' | grep "$OPENDNS_EXE" | awk '{ print $1 }') ]\n"
-      fi
-   fi
-
-   if [[ -d /Library/Application\ Support/DNSCrypt/control ]]; then
-       touch /Library/Application\ Support/DNSCrypt/control/dnscrypt
-       touch /Library/Application\ Support/DNSCrypt/control/fallback
-       printf "Enabled DNSCrypt\n"
-   fi
+	quit_program $(echo $ORADOCS_EXE | awk -F/ '{ print $NF }')
 	
 	# DropBox
    if [[ -x "$DROPBOX_EXE" ]]; then
@@ -225,8 +219,10 @@ at_home()
    # Yosemite discoveryd needs a kick in the butt
    [[ -f /etc/resolver/oracle.com ]] && sudo rm /etc/resolver/oracle.com
 	[[ -f /etc/resolver/oraclecorp.com ]] && sudo rm /etc/resolver/oraclecorp.com
-   [[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -force
-	
+   #[[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -f
+
+   sudo systemsetup -setnetworktimeserver time.apple.com
+
    set_default_printer "$HOME_PRINTER"
    set_chat_status "$HOME_STATUS"
 }
