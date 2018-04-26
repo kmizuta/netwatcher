@@ -77,15 +77,15 @@ For example:
 1. Open a terminal and cd to the directory where you cloned the repository; for example `cd ~/github/local/netwatcher`
 2. Execute: `./setup –u`
 
-###Customization
+### Customization
 Edit `~/Library/Scripts/netwatcher` (please consider contributing your changes if they don’t suck :-P). Change preferences in `~/.netwatcherrc` or by running `./setup -r`
 
-###Logging
+### Logging
 The log is stored in `~/Library/Logs` and will auto-purge when >= 1MB. It is best viewed in Console.app:<br />
 
 ![Console.app](http://effinthing.com/netwatcher/console_app.png)
 
-###Notification Center
+### Notification Center
 Notifications are (optionally) sent when netwatcher takes action:<br />
 
 ![Notification center messages](http://effinthing.com/netwatcher/notifications.png)
