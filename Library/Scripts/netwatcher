@@ -36,14 +36,10 @@ PROXYF_EXE="/Applications/Proxifier.app/Contents/MacOS/Proxifier"
 
 # Cloud sharing services are prohibited by corporate policy
 DROPBOX_EXE="/Applications/Dropbox.app/Contents/MacOS/Dropbox"
-NEXTCLOUD_EXE="/Applications/nextcloud.app/Contents/MacOS/nextcloud"
+#NEXTCLOUD_EXE="/Applications/nextcloud.app/Contents/MacOS/nextcloud"
 
 # Oracle Documents Cloud
 ORADOCS_EXE="/Applications/Oracle Documents.app/Contents/MacOS/JavaAppLauncher"
-
-# NTP servers
-HOME_NTP="time.apple.com"
-WORK_NTP=$(route -n get default | awk -F": " '/gateway/{ print $NF }')
 
 #-------------------------------------------------------------------------------
 # Defaults
@@ -152,6 +148,32 @@ EOF
 	fi
 }
 
+set_adium_status()
+{
+	local status="$1"
+	printf "Changing Adium status"
+	for ((count=10; count!=0; count--)) { sleep 1 ; printf "."; }
+	printf " $status\n"
+	if [[ $status == Offline ]]; then
+		/usr/bin/osascript <<EOF
+tell application "System Events"
+if exists process "Adium" then
+tell application "Adium" to go offline account "don.feliciano@oracle.com"
+end if
+end tell
+EOF
+	else
+		/usr/bin/osascript <<EOF
+tell application "System Events"
+if exists process "Adium" then
+tell application "Adium" to go online account "don.feliciano@oracle.com"
+tell application "Adium" to go away
+end if
+end tell
+EOF
+	fi
+}
+
 set_default_printer()
 {
 	local printer="$1"
@@ -180,22 +202,27 @@ at_work()
 		fi
 	fi
 	
-	ORADOCS_STATUS=$(return_program_status "$ORADOCS_EXE")
-	printf "Oracle Documents status: $ORADOCS_STATUS\n"
-	if [[ $ORADOCS_STATUS == inactive ]]; then
-		nohup "$ORADOCS_EXE" > /dev/null 2>&1 &
-		printf "Started Oracle Documents [ pid $! ]\n"
-	fi
+	#ORADOCS_STATUS=$(return_program_status "$ORADOCS_EXE")
+	#printf "Oracle Documents status: $ORADOCS_STATUS\n"
+	#if [[ $ORADOCS_STATUS == inactive ]]; then
+	#	nohup "$ORADOCS_EXE" > /dev/null 2>&1 &
+	#	printf "Started Oracle Documents [ pid $! ]\n"
+	#fi
 	
    # Yosemite discoveryd needs a kick in the butt
    #[[ -f /usr/local/etc/oracle.com ]] && sudo cp /usr/local/etc/oracle.com /etc/resolver
 	#[[ -f /usr/local/etc/oraclecorp.com ]] && sudo cp /usr/local/etc/oraclecorp.com /etc/resolver
    #[[ -x /usr/local/bin/resetDNS ]] && /usr/local/bin/resetDNS -f
    
-   sudo systemsetup -setnetworktimeserver $WORK_NTP
+	if [[ $VPN_IP =~ [1-9] ]]; then
+   	sudo systemsetup -setnetworktimeserver $VPN_NTP
+	else
+		sudo systemsetup -setnetworktimeserver $WORK_NTP
+	fi
 	  
 	set_default_printer "$WORK_PRINTER"
-	set_chat_status "$VPN_STATUS"
+	#set_chat_status "$VPN_STATUS"
+	set_adium_status "$WORK_STATUS"
 }
 
 at_home()
@@ -228,7 +255,8 @@ at_home()
    sudo systemsetup -setnetworktimeserver $HOME_NTP
 
    set_default_printer "$HOME_PRINTER"
-   set_chat_status "$HOME_STATUS"
+   #set_chat_status "$HOME_STATUS"
+	set_adium_status "$HOME_STATUS"
 }
 
 print_break () {
@@ -363,6 +391,11 @@ if [[ $PAUSE_TO_SETTLE == y ]]; then
 fi
 
 notify "Network configuration change" "Processing ruleset"
+
+# NTP servers
+HOME_NTP="time.apple.com"
+VPN_NTP="10.91.92.1"
+WORK_NTP=$(route -n get default | awk -F": " '/gateway/{ print $NF }')
 
 # VPN trumps everything
 VPN_IP=$(/sbin/ifconfig $VPN_IF 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
