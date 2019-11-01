@@ -1,4 +1,8 @@
-#!/bin/sh
+#!/bin/bash
+
+# Constants
+declare -r CONFIG_DIR="${HOME}/.netwatcher"
+declare -r CONFIG_FILE="${CONFIG_DIR}/config"
 
 # Functions
 ask ()
@@ -45,22 +49,21 @@ uninstall ()
 	 rm -f ~/Library/Scripts/netwatcher
 	 rm -f ~/Library/LaunchAgents/local.netwatcher.plist
 	 rm -f ~/Library/Logs/netwatcher.log
-	 rm -rf ~/Library/Workflows/notify.workflow
-	 rm -rf ~/Library/Automator/Display\ Notification\ Center\ Alert.action
+	 rm -rf "$CONFIG_DIR"
+	 printf "Uninstall complete\n"
+	 exit 0
 }
 
 usage ()
 {
 	cat<<EOF
-Usage: $(basename $0) [-u] [-r] [-t secs] [-p secs] [-o]
+Usage: $(basename $0) [-u] [-r] [-t secs] [-p secs]
 	   -u Stop and uninstall
 	   -r Reinstall (re-ask setup questions)
 	   -t Time (in seconds) that must pass between network changes for them to be considered valid
 	   -p Time (in seconds) to pause before evaluating a network change to allow interfaces to settle
-	   -o Disables optimization test (i.e. don't check if configd trigger was due to new interface/ip combo -
-		  if you don't understand this argument, you don't need to pass it)
 
-Example: $0 -t 5 -p 5
+Example: $0 -t 5 -p 10
 
 EOF
 	 exit 0
@@ -75,112 +78,147 @@ errtrap ()
 
 #-------------------------------------------------------------------------------
 # Main script
-while getopts ":urt:p:o" OPTION; do
+while getopts ":urt:p:" OPTION; do
 	 case $OPTION in
 		  u) UNINSTALL=true ;;
 		  r) REINSTALL=true ;;
-		  t) THROTTLE_SET=true
+		  t) THROTTLE=true
 			 THROTTLE_TIME=$OPTARG ;;
 		  p) PAUSE_TO_SETTLE=true
 			 PAUSE_TIME=$OPTARG ;;
-		  o) DOL=true ;;
 		  ?) usage ;;
 	 esac
 done
-shift $((OPTIND-1))
+shift $(( OPTIND-1 ))
 
 # trap errors
 trap 'errtrap ${LINENO}' ERR
 
-uninstall
-[[ $UNINSTALL == true ]] && { printf "Uninstall complete\n"; exit 0; }
+[[ $UNINSTALL == true ]] && uninstall
+[[ $REINSTALL == true ]] && rm -f $CONFIG_FILE
 
-RC_FILE=~/.netwatcherrc
-[[ $REINSTALL == true ]] && rm -f $RC_FILE
+# Stop existing install
+launchctl unload \
+		 ~/Library/LaunchAgents/local.netwatcher.plist > /dev/null 2>&1
 
 # Load previous settings
-if [[ -r $RC_FILE ]]; then
-	source $RC_FILE
-	printf "Using existing $RC_FILE\n"
+if [[ -r $CONFIG_FILE ]]; then
+	source $CONFIG_FILE
+	printf "Using existing $CONFIG_FILE\n"
 
 else
 	# Collect settings
-	touch $RC_FILE
+	mkdir -p "$CONFIG_DIR"
+	touch "$CONFIG_FILE"
 
 	printf "Do you want to watch for wired ethernet connections?"
 	ask
 	if [[ $ANSWER == y ]]; then
-		printf "ETHERNET=true\n" >> $RC_FILE
+		printf "ETHERNET=true\n" >> $CONFIG_FILE
 	else
-		printf "ETHERNET=false\n" >> $RC_FILE
+		printf "ETHERNET=false\n" >> $CONFIG_FILE
 	fi
 
-	printf "Do you want to enable flight mode? (Turns off Wi-Fi if not connected)"
-	ask
-	if [[ $ANSWER == y ]]; then
-		printf "FLIGHT_MODE=true\n" >> $RC_FILE
+	ls -d "/Applications/Adium.app" > /dev/null 2>&1
+	if (( $? == 0 )); then
+		printf "Do you want to change your status in Adium when your connection changes?"
+		ask
+		if [[ $ANSWER == y ]]; then
+			collect_response "Enter your Adium account username" "$(id -un)"
+			printf "ADIUM_ACCOUNT=\"$RESPONSE\"\n" >> $CONFIG_FILE
+			printf "\nModify $CONFIG_FILE to change the status messages\n"
+			printf "ADIUM=\"true\"\n" >> $CONFIG_FILE
+			printf "ADIUM_WORK_STATUS=\"Away\"\n" >> $CONFIG_FILE
+			printf "ADIUM_HOME_STATUS=\"Offline\"\n" >> $CONFIG_FILE
+		fi
 	else
-		printf "FLIGHT_MODE=false\n" >> $RC_FILE
+		printf "ADIUM_ACCOUNT=\"none\"\n" >> $CONFIG_FILE
+		printf "ADIUM=\"false\"\n" >> $CONFIG_FILE
+		printf "ADIUM_WORK_STATUS=\"Away\"\n" >> $CONFIG_FILE
+		printf "ADIUM_HOME_STATUS=\"Offline\"\n" >> $CONFIG_FILE
 	fi
 
-	printf "Do you want to change your status in Messages when your connection changes?"
-	ask
-	if [[ $ANSWER == y ]]; then
-		printf "\nModify $RC_FILE to change the status messages\n\n"
-		printf "WORK_STATUS=\"In the office\"\n" >> $RC_FILE
-		printf "HOME_STATUS=\"At home\"\n" >> $RC_FILE
-		printf "VPN_STATUS=\"On VPN\"\n" >> $RC_FILE
+	ls -d "/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app" > /dev/null 2>&1
+	if (( $? == 0 )); then
+		printf "CISCO_ANYCONNECT=\"true\"\n" >> $CONFIG_FILE
+	else
+		printf "CISCO_ANYCONNECT=\"false\"\n" >> $CONFIG_FILE
+	fi
+
+	ls -d "/Applications/Dropbox.app" > /dev/null 2>&1
+	if (( $? == 0 )); then
+		printf "DROPBOX=\"true\"\n" >> $CONFIG_FILE
+	else
+		printf "DROPBOX=\"false\"\n" >> $CONFIG_FILE
+	fi
+
+	ls -d "/Applications/Oracle Documents.app" > /dev/null 2>&1
+	if (( $? == 0 )); then
+		printf "ORADOCS=\"true\"\n" >> $CONFIG_FILE
+	else
+		printf "ORADOCS=\"false\"\n" >> $CONFIG_FILE
+	fi
+
+	ls -d "/Applications/Proxifier.app" > /dev/null 2>&1
+	if (( $? == 0 )); then
+		printf "PROXIFIER=\"true\"\n" >> $CONFIG_FILE
+	else
+		printf "PROXIFIER=\"false\"\n" >> $CONFIG_FILE
 	fi
 
 	printf "\nThe following printers are installed:\n\n"
 	lpstat -p | awk '/^printer/ { print $2 }'
 	printf "\n$(lpstat -d)\n\n"
-	DEFAULT_PRINTER=$(lpstat -d | awk '{ print $NF }')
-	collect_response "Enter the name of your work printer or \"none\" to disable this feature" "$DEFAULT_PRINTER"
-	printf "WORK_PRINTER=\"$RESPONSE\"\n" >> $RC_FILE
-	collect_response "Enter the name of your home printer or \"none\" to disable this feature" "$DEFAULT_PRINTER"
-	printf "HOME_PRINTER=\"$RESPONSE\"\n" >> $RC_FILE
+	default_printer=$(lpstat -d | awk '{ print $NF }')
+	collect_response "Enter the name of your work printer or \"none\" to disable this feature" "$default_printer"
+	printf "WORK_PRINTER=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	collect_response "Enter the name of your home printer or \"none\" to disable this feature" "$default_printer"
+	printf "HOME_PRINTER=\"$RESPONSE\"\n" >> $CONFIG_FILE
 
-	printf "Do you want to enable Notification Center alerts? (Requires OSX >= 10.8)"
-	ask
-	if [[ $ANSWER == y ]]; then
-		printf "NOTIFICATION_CENTER=true\n" >> $RC_FILE
+	PATH=/usr/local/bin:${PATH} which -s terminal-notifier
+	if (( $? == 0 )); then
+		printf "Do you want to enable Notification Center alerts?"
+		ask
+		if [[ $ANSWER == y ]]; then
+			printf "NOTIFICATION_CENTER=true\n" >> $CONFIG_FILE
+		else
+			printf "NOTIFICATION_CENTER=false\n" >> $CONFIG_FILE
+		fi
 	else
-		printf "NOTIFICATION_CENTER=false\n" >> $RC_FILE
+		printf "NOTIFICATION_CENTER=false\n" >> $CONFIG_FILE
 	fi
 
 	collect_response "Enter the IP address pattern of your workplace" "10.[0-9][0-9][0-9]"
-	printf "WORK_IP_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
+	printf "WORK_IP_PATTERN=\"$RESPONSE\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the domain suffix pattern of your workplace" "example.com"
-	printf "WORK_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
+	printf "WORK_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the SSID for your workplace" "clear-corporate"
-	printf "WORK_SSID=\"$RESPONSE\"\n" >> $RC_FILE
+	printf "WORK_SSID=\"$RESPONSE\"\n" >> $CONFIG_FILE
 
-	collect_response "Enter the SSID for your home" "wrt"
-	printf "HOME_SSID=\"$RESPONSE\"\n" >> $RC_FILE
+	collect_response "Enter the SSID for your home" "You kids get off my LAN"
+	printf "HOME_SSID=\"$RESPONSE\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the domain suffix pattern for your home" "local"
-	printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $RC_FILE
+	printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $CONFIG_FILE
 fi
 
 cat $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist_template | sed "s/USERX/$USER/g" > $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist
 cp -r $(dirname $0)/Library ~/
 
-[[ $THROTTLE_SET == true ]] && THROTTLE_OPTIONS="-t$THROTTLE_TIME"
+[[ $THROTTLE == true ]] && THROTTLE_OPTIONS="-t$THROTTLE_TIME"
 [[ $PAUSE_TO_SETTLE == true ]] && PAUSE_OPTIONS="-p$PAUSE_TIME"
-[[ $DOL == true ]] && DOL_OPTIONS="-o"
 
-ARGS=("$THROTTLE_OPTIONS" "$PAUSE_OPTIONS" "$DOL_OPTIONS")
-for ((i=0; i<${#ARGS[@]}; i++)); do
-   if ((${#ARGS[i]} == 0)); then
+ARGS=("$THROTTLE_OPTIONS" "$PAUSE_OPTIONS")
+for (( i=0; i<${#ARGS[@]}; i++ )); do
+   if (( ${#ARGS[i]} == 0 )); then
 	  unset ARGS[i]
    fi
 done
 
-if [[ -n $OPTION ]]; then
-	printf "Setting options to: $THROTTLE_OPTIONS $PAUSE_OPTIONS $DOL_OPTIONS\n"
+if [[ $THROTTLE == true ]] || [[ $PAUSE_TO_SETTLE == true ]]; then
+	printf "Setting options to: $THROTTLE_OPTIONS $PAUSE_OPTIONS\n"
 	defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
 		 ProgramArguments \
 		 -array "${HOME}/Library/Scripts/netwatcher" ${ARGS[@]}

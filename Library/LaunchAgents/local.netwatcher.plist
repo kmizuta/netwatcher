@@ -7,8 +7,8 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Users/dfelicia/Library/Scripts/netwatcher</string>
-        <string>-t 5</string>
-        <string>-p3</string>
+        <string>-t5</string>
+        <string>-p5</string>
     </array>
     <key>WatchPaths</key>
     <array>
