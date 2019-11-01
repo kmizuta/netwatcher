@@ -158,7 +158,7 @@ set_ntp_server()
 	local mytemp=$(mktemp -t ${id}.xxxx)
 	local pid
 	declare -i nopasswd_all
-    declare -i nopasswd_systemsetup
+	declare -i nopasswd_systemsetup
 	declare -i count=0
 
 	# If user is not in sudoers with "NOPASSWD: ALL" we can't
@@ -166,13 +166,13 @@ set_ntp_server()
 	(sudo -l > "$mytemp" 2>&1) &
 	pid=$!
 	
-    sleep 1
+	sleep 1
 
 	grep -sqi 'NOPASSWD.*ALL' ${mytemp} 2>/dev/null
-    nopasswd_all=$?
+	nopasswd_all=$?
 
-    grep -sqi 'NOPASSWD.*systemsetup' ${mytemp} 2>/dev/null
-    nopasswd_systemsetup=$?
+	grep -sqi 'NOPASSWD.*systemsetup' ${mytemp} 2>/dev/null
+	nopasswd_systemsetup=$?
 
 	if ( (( nopasswd_all == 0 )) || (( nopasswd_systemsetup == 0 )) ); then
 		sudo systemsetup -setnetworktimeserver $ntp_server
@@ -185,7 +185,7 @@ set_ntp_server()
 		fi
 	fi
 
-    rm -f "$mytemp"
+	rm -f "$mytemp"
 }
 
 print_dashes () {
