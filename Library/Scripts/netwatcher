@@ -35,7 +35,7 @@ VPN_IF=""
 IP=""
 VPN_IP=""
 DOMAIN=""
-ssid=""
+SSID=""
 
 #-------------------------------------------------------------------------------
 # Load user configuration
@@ -48,13 +48,13 @@ source $CONFIG_FILE
 #
 notify ()
 {
-	printf "${message}\n"
+	local title=$1
+	local message=$2
+
+	printf "${title}\n${message}\n"
 
 	[[ -x /usr/local/bin/terminal-notifier ]] || return 0
 	[[ $NOTIFICATION_CENTER == false ]] && return 0
-
-	local title=$1
-	local message=$2
 
 	/usr/local/bin/terminal-notifier -title "$title" \
 		-message "$message" -sound Pop
@@ -87,7 +87,7 @@ get_ssid ()
 {
 	local interface=$1
 	local ssid="$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I |\
-		awk -F': ' '/^.* ssid/ { print $2 }')"
+		awk -F': ' '/^.* SSID/ { print $2 }')"
 	printf "$ssid"
 }
 
@@ -250,7 +250,7 @@ finish() {
 	if [[ -n $last_config ]] && [[ $last_config != restart ]]; then
 		printf "$last_config" > $LAST_MARKER
 	elif [[ $last_config == restart ]]; then
-		rm $LAST_MARKER
+		rm -f $LAST_MARKER
 	else
 		touch $LAST_MARKER
 	fi
@@ -433,26 +433,27 @@ if [[ $wifi_status == inactive ]]; then
 	finish restart
 fi
 
-# TODO (?) - accept a hash of known ssids and their respective prefs, then
+# TODO (?) - accept a hash of known SSIDs and their respective prefs, then
 # act accordingly. Too much work for me as I see no action necessary
 # for a public hotspot beyond killing off Proxifier and the else clause
 # below does that
 
 # Okey dokey. By now we should have associated with a Wi-Fi network
 IP=""
-ssid="$(get_ssid $WIFI_IF)"
-if [[ -n $ssid ]]; then
+SSID="$(get_ssid $WIFI_IF)"
+if [[ -n $SSID ]]; then
 	IP=$(/usr/sbin/ipconfig getifaddr $WIFI_IF)
 	DOMAIN=$(/usr/sbin/ipconfig getoption $WIFI_IF domain_name)
 	if [[ $IP =~ [1-9] ]]; then
-		if [[ $ssid =~ $WORK_ssid ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
+		if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
 			switch_location "work"
-		elif [[ $ssid =~ $HOME_ssid ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
+		elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
 			switch_location "home"
 		else
-			notify "ssid: $ssid" "$IP"
+			notify "SSID: $SSID" "IP: $IP"
 			quit_program "Cisco AnyConnect Secure Mobility Client"
 			quit_program "Proxifier"
+			quit_program "Oracle Content.app/Contents/MacOS/JavaAppLauncher"
 		fi
 	fi
 else
