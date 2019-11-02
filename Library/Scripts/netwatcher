@@ -199,14 +199,19 @@ switch_location ()
 	local location=$1
 
 	if [[ $location == work ]]; then
-		notify "Location: Work" "IP: $IP"
+		if [[ $VPN_IP =~ [1-9] ]]; then
+			notify "Location: Work" "IP: $VPN_IP"
+		else
+			notify "Location: Work" "IP: $IP"
+		fi
+
 		[[ $DROPBOX == true ]] && quit_program Dropbox	
 
 		if [[ $PROXIFIER == true ]]; then	
-			proxifier_status=$(return_program_status Proxifier)
+			proxifier_status=$(return_program_status "Contents/MacOS/Proxifier")
 			if [[ $proxifier_status == inactive ]]; then
 				open -a "Proxifier"
-				printf "Started Proxifier [ pid: $(pgrep Proxifier) ]\n"
+				printf "Started Proxifier [ pid: $(pgrep -f 'Contents/MacOS/Proxifier') ]\n"
 			fi
 		fi
 		
@@ -227,7 +232,12 @@ switch_location ()
 		set_default_printer "$WORK_PRINTER"
 		set_adium_status "$ADIUM_WORK_STATUS"
 	else
-		notify "Location: Home" "IP: $IP"
+		if [[ $VPN_IP =~ [1-9] ]]; then
+			notify "Location: Home" "IP: $VPN_IP"
+		else
+			notify "Location: Home" "IP: $IP"
+		fi
+
 		[[ $CISCO_ANYCONNECT == true ]] && quit_program "Cisco AnyConnect Secure Mobility Client"
 		[[ $PROXIFIER == true ]] && quit_program "Proxifier"
 		[[ $ORADOCS == true  ]] && quit_program "Oracle Content.app/Contents/MacOS/JavaAppLauncher"
