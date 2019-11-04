@@ -243,7 +243,7 @@ switch_location ()
 		[[ $ORADOCS == true  ]] && quit_program "Oracle Content.app/Contents/MacOS/JavaAppLauncher"
 		
 		if [[ $DROPBOX == true ]]; then
-			if [[ $(return_program_status "Dropbox") == inactive ]]; then
+			if [[ $(return_program_status "Dropbox.app/Contents/MacOS/Dropbox") == inactive ]]; then
 				open -a "Dropbox" && printf "Started Dropbox\n"
 			fi
 		fi
