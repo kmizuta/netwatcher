@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -o nounset #(a.k.a. set -u) exit if script tries to use undeclared variables.
+
 #
 #	 NAME
 #	   netwatcher
@@ -15,27 +18,22 @@
 #	 AUTHOR
 #	   Don Feliciano (don@effinthing.com)
 #
+
+# TODO
+# See if we can use VPN gateway as NTP server
+# See if we can get VPN domain
+
 #-------------------------------------------------------------------------------
 # Constants
 declare -r CONFIG_FILE=${HOME}/.netwatcher/config
 declare -r LAST_MARKER=~/.netwatcher/last_known_network
+declare -r APPLE_TIME_SERVER="time.apple.com"
 
 #-------------------------------------------------------------------------------
 # Globals
 PAUSE_TO_SETTLE="y"
 PAUSE_TIME=5
 THROTTLE=5
-HOME_NTP="time.apple.com"
-VPN_NTP="10.91.92.1"
-WORK_NTP=$(route -n get default | awk -F": " '/gateway/{ print $NF }')
-WIFI_IF=""
-ETHERNET_IF=""
-BRIDGE_IF=""
-VPN_IF=""
-IP=""
-VPN_IP=""
-DOMAIN=""
-SSID=""
 
 #-------------------------------------------------------------------------------
 # Load user configuration
@@ -46,8 +44,7 @@ source $CONFIG_FILE
 #-------------------------------------------------------------------------------
 # Functions
 #
-notify ()
-{
+notify() {
 	local title=$1
 	local message=$2
 
@@ -60,21 +57,18 @@ notify ()
 		-message "$message" -sound Pop
 }
 
-turn_on_airport ()
-{
+turn_on_airport() {
 	local interface=$1
 	/usr/sbin/networksetup -setairportpower $interface on
 }
 
-turn_off_airport ()
-{
+turn_off_airport() {
 	local interface=$1
 	/usr/sbin/networksetup -setairportpower $interface off
 	sleep 5 # triggers another network_change
 }
 
-return_interface_status ()
-{
+return_interface_status() {
 	local interface=$1
 	local status=$(/sbin/ifconfig $interface 2>/dev/null | awk '/status:/ { print $NF }')
 	if [[ ! $status =~ active ]]; then
@@ -83,16 +77,14 @@ return_interface_status ()
 	printf $status
 }
 
-get_ssid ()
-{
+get_ssid() {
 	local interface=$1
 	local ssid="$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I |\
 		awk -F': ' '/^.* SSID/ { print $2 }')"
 	printf "$ssid"
 }
 
-return_program_status ()
-{
+return_program_status() {
 	local program=$1
 	local status=$(pgrep -f "$program")
 	if [[ $status == "" ]]; then
@@ -102,8 +94,7 @@ return_program_status ()
 	fi
 }
 
-quit_program ()
-{
+quit_program() {
 	local program=$1
 	local friendly_name=$(echo $program | awk -F/ '{ print $NF }')
 	
@@ -111,8 +102,7 @@ quit_program ()
 	pkill -f "$program" > /dev/null 2>&1
 }
 
-set_adium_status()
-{
+set_adium_status() {
 	local status=$1
 	declare -i count
 	local state=$(return_program_status "Adium")
@@ -138,12 +128,11 @@ set_adium_status()
 			end tell
 			EOF
 	fi
-	for (( count=5; count!=0; count-- )) { sleep 1 ; printf "."; }
+	for ((count=5; count!=0; count--)) { sleep 1 ; printf "."; }
 	printf " $status\n"
 }
 
-set_default_printer()
-{
+set_default_printer() {
 	local printer=$1
 	if [[ $printer != none ]] && [[ -n $printer ]]; then
 		printf "Setting default printer: $printer\n"
@@ -151,8 +140,7 @@ set_default_printer()
 	fi
 }
 
-set_ntp_server()
-{
+set_ntp_server() {
 	local ntp_server=$1
 	local id=$(id -un)
 	local mytemp=$(mktemp -t ${id}.xxxx)
@@ -174,7 +162,7 @@ set_ntp_server()
 	grep -sqi 'NOPASSWD.*systemsetup' ${mytemp} 2>/dev/null
 	nopasswd_systemsetup=$?
 
-	if ( (( nopasswd_all == 0 )) || (( nopasswd_systemsetup == 0 )) ); then
+	if ( ((nopasswd_all == 0)) || ((nopasswd_systemsetup == 0)) ); then
 		sudo systemsetup -setnetworktimeserver $ntp_server
 	else
 		printf "${id} does not have passwordless sudo access. NTP server cannot be changed.\n"
@@ -188,24 +176,21 @@ set_ntp_server()
 	rm -f "$mytemp"
 }
 
-print_dashes () {
+print_dashes() {
 	declare -i count
 	declare -i num_dashes=$1
-	for (( count=0; count!=num_dashes; count++ )) { printf %s '-'; }
+	for ((count=0; count!=num_dashes; count++)) { printf %s '-'; }
 }
 
-switch_location ()
-{
-	local location=$1
+switch_location() {
+	local location="$1"
+	local ip_address="$2"
+	local ntp_server="$3"
 
 	if [[ $location == work ]]; then
-		if [[ $VPN_IP =~ [1-9] ]]; then
-			notify "Location: Work" "IP: $VPN_IP"
-		else
-			notify "Location: Work" "IP: $IP"
-		fi
+		notify "Location: Work" "IP: $ip_address"
 
-		[[ $DROPBOX == true ]] && quit_program Dropbox	
+		[[ $DROPBOX == true ]] && quit_program "Dropbox"
 
 		if [[ $PROXIFIER == true ]]; then	
 			proxifier_status=$(return_program_status "Contents/MacOS/Proxifier")
@@ -216,27 +201,17 @@ switch_location ()
 		fi
 		
 		if [[ $ORADOCS == true ]]; then
-			oradocs_status=$(return_program_status "Oracle Content")
-			if [[ $oradocs_status == inactive ]]; then
+			if [[ $(return_program_status "Oracle Content") == inactive ]]; then
 				open -a "Oracle Content"
 				printf "Started Oracle Documents [ pid $(pgrep -f Oracle\ Content.app/Contents/MacOS/JavaAppLauncher)  ]\n"
 			fi
 		fi
 	
-		if [[ $VPN_IP =~ [1-9] ]]; then
-			set_ntp_server "$VPN_NTP"
-		else
-			set_ntp_server "$WORK_NTP"
-		fi
-		
+		set_ntp_server "$ntp_server"
 		set_default_printer "$WORK_PRINTER"
 		set_adium_status "$ADIUM_WORK_STATUS"
 	else
-		if [[ $VPN_IP =~ [1-9] ]]; then
-			notify "Location: Home" "IP: $VPN_IP"
-		else
-			notify "Location: Home" "IP: $IP"
-		fi
+		notify "Location: Home" "IP: $ip_address"
 
 		[[ $CISCO_ANYCONNECT == true ]] && quit_program "Cisco AnyConnect Secure Mobility Client"
 		[[ $PROXIFIER == true ]] && quit_program "Proxifier"
@@ -248,14 +223,25 @@ switch_location ()
 			fi
 		fi
 
-		set_ntp_server "$HOME_NTP"
+		set_ntp_server "$ntp_server"
 		set_default_printer "$HOME_PRINTER"
 		set_adium_status "$ADIUM_HOME_STATUS"
 	fi
 }
 
+purge_log() {
+	local log_file=$(defaults read /Users/${USER}/Library/LaunchAgents/local.netwatcher StandardOutPath)
+	local log_size=$(du -k $log_file | awk '{print $1}')
+	if ((log_size > 1024)); then
+		: > $log_file
+		printf "$(date '+%b %d %H:%M:%S'): Purged $log_file\n"
+	fi
+}
+
 finish() {
-	local last_config="$@"
+	local last_config=""
+
+	(($# > 0)) && last_config="${@}"
 	
 	if [[ -n $last_config ]] && [[ $last_config != restart ]]; then
 		printf "$last_config" > $LAST_MARKER
@@ -269,205 +255,226 @@ finish() {
 	exit 0
 }
 
+main() {
+	local OPTIND
+
+	# Process command line arguments
+	while getopts ":t:p:" OPTION; do
+		case $OPTION in
+			t) THROTTLE=$OPTARG ;;
+			p) PAUSE_TO_SETTLE="y"
+			PAUSE_TIME=$OPTARG ;;
+			?) ;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	# Purge log if it is megabyte(s)
+	purge_log
+
+	# Log start of main logic
+	printf %b%s%b "\n" "$(print_dashes 20) $(date '+%b %d %H:%M:%S') $(print_dashes 21)" "\n"
+
+	# Exit if we ran less than $THROTTLE seconds ago
+	if [[ -r $LAST_MARKER ]]; then
+		local now=$(date +%s)
+		local last_update=$(stat -f %m $LAST_MARKER)
+		if (($((now - last_update)) < THROTTLE)); then
+			printf "Ran less than $THROTTLE seconds ago, exiting.\n"
+			finish
+		fi
+	fi
+
+	# If -p was passed, pause to settle
+	if [[ $PAUSE_TO_SETTLE == y ]]; then
+		printf "Pausing $PAUSE_TIME seconds to let interfaces settle... "
+		for ((count=$PAUSE_TIME; count!=0; count--)) { sleep 1 ; printf "$count "; }
+		printf "\n"
+	fi
+
+	printf "Probing for configured bridge, ethernet, or wi-fi network interfaces...\n"
+	local configured_interface bridge_if ethernet_if wifi_if 
+	local interfaces="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed -e s/^'(Hardware Port: '// -e s/\)// | sort)"
+	IFS=$(printf "\n\b")
+	for configured_interface in $interfaces; do
+		printf "	$configured_interface\n"
+		if [[ $configured_interface =~ Bridge ]]; then
+			bridge_if=$(printf $configured_interface | awk '{ print $NF }')
+		elif [[ $configured_interface =~ Ethernet ]]; then
+			ethernet_if=$(printf $configured_interface | awk '{ print $NF }')
+		elif [[ $configured_interface =~ Wi-Fi ]]; then
+			wifi_if=$(printf $configured_interface | awk '{ print $NF }')
+		fi
+	done
+	unset IFS
+
+	[[ -n $bridge_if ]] || bridge_if="not_configured"
+	[[ -n $ethernet_if ]] || ethernet_if="not_configured"
+	[[ -n $wifi_if ]] || wifi_if="not_configured"
+
+	# If we have an active bridge we'll treat it as an ethnernet interface
+	local bridge_status=$(return_interface_status $bridge_if)
+	if [[ $bridge_status == active ]]; then
+		$ethernet_if=$bridge_if
+	fi
+
+	# See if we have an active VPN connection
+	local vpn_if vpn_ip_address
+	printf "Checking link status for VPN..."
+	for vpn_if in $(ifconfig | grep -o '^utun[0-9].*:' | sed 's/://'); do
+		printf "."
+		vpn_ip_address=$(/sbin/ifconfig $vpn_if 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
+		if [[ -n $vpn_ip_address ]]; then
+			if [[ $vpn_ip_address =~ [1-9] ]]; then
+				printf " active (${vpn_if})\n"
+				# There should only be one utun interface with an IP, but we'll break on the first found
+				break
+			fi
+		fi
+	done
+	
+	[[ -n $vpn_ip_address ]] || { vpn_ip_address="inactive"; printf " inactive\n"; }
+	[[ -n $vpn_if ]] || vpn_if="not_configured"
+
+	# Make sure something is different than the last run (should always be the case, but...)
+	if [[ -r $LAST_MARKER ]]; then
+		local last_config="$(cat $LAST_MARKER)"
+		local nothing_changed="false"
+		if [[ $vpn_ip_address != inactive ]]; then
+			if [[ "$last_config" == "$vpn_if $(/sbin/ifconfig $vpn_if | grep 'inet ' | awk '{ print $2 }')" ]]; then
+				nothing_changed="true"
+			fi
+		else
+			if [[ "$last_config" == "$wifi_if $(/usr/sbin/ipconfig getifaddr $wifi_if)" ]] && \
+			   [[ $(return_interface_status $ethernet_if) == inactive ]] ; then
+					nothing_changed="true"
+			elif [[ "$last_config" == "$ethernet_if $(/usr/sbin/ipconfig getifaddr $ethernet_if)" ]]; then
+				nothing_changed="true"
+			fi
+		fi
+		
+		if [[ $nothing_changed == true ]]; then
+			printf "Nothing has changed. The active network is still: $last_config\n"
+			finish
+		fi
+	fi
+
+	# VPN trumps everything
+	if [[ -n $vpn_ip_address ]]; then
+		if [[ $vpn_ip_address =~ [1-9] ]]; then
+			if grep -qs "$WORK_DOMAIN_PATTERN" /etc/resolv.conf ; then
+				switch_location "work" "$vpn_ip_address" "10.91.92.1"
+			else
+				switch_location "home" "$vpn_ip_address" "$APPLE_TIME_SERVER"
+			fi
+			finish "$vpn_if" "$vpn_ip_address"
+		fi
+	fi
+
+	# Ethernet trumps Wi-Fi
+	if [[ $ETHERNET == true ]] && [[ -n $ethernet_if ]]; then
+		printf "Checking link status for $ethernet_if (ethernet)..."
+		local ethernet_status=$(return_interface_status $ethernet_if)
+		local ethernet_ip_address ethernet_domain
+		((count=0)) # If cable was just plugged-in we need time for DHCP to do its thing
+		while [[ $ethernet_status != active ]] && ((count != 5)); do
+			sleep 1
+			printf "."
+			ethernet_status=$(return_interface_status $ethernet_if)
+			((count++))
+		done
+		printf " $ethernet_status\n"
+		
+		if [[ $ethernet_status == active ]]; then
+			printf "Fetching IP and domain info for $ethernet_if (ethernet)..."
+			ethernet_ip_address=$(/usr/sbin/ipconfig getifaddr $ethernet_if)
+			((count=0))
+			while [[ ! $ethernet_ip_address =~ [1-9] ]] && ((count != 15)); do
+				sleep 1
+				printf "."
+				ethernet_ip_address=$(/usr/sbin/ipconfig getifaddr $ethernet_if)
+				((count++))
+			done
+			
+			ethernet_domain=$(/usr/sbin/ipconfig getoption $ethernet_if domain_name 2>/dev/null)
+			[[ -n $ethernet_domain ]] || ethernet_domain="not_configured"
+			if [[ -n $ethernet_ip_address ]]; then
+				printf " done\n"
+				if [[ $ethernet_ip_address =~ [1-9] ]]; then
+					if [[ $ethernet_ip_address =~ $WORK_IP_PATTERN ]] || [[ $ethernet_domain =~ $WORK_DOMAIN_PATTERN ]]; then
+						switch_location "work" "$ethernet_ip_address" "$(route -n get default | awk -F": " '/gateway/{ print $NF }')"
+					else
+						switch_location "home" "$ethernet_ip_address" "$APPLE_TIME_SERVER"
+					fi
+					printf "On ethernet, turning off Wi-Fi... "
+					turn_off_airport $wifi_if
+					printf "DONE\n"
+					finish "$ethernet_if $ethernet_ip_address"
+				else
+					printf "DEBUG: \$ethernet_ip_address is: ${ethernet_ip_address}\n"
+				fi
+			else
+				printf " timed out\n"
+			fi
+		fi
+	fi
+
+	# If no ethernet, try Wi-Fi
+	printf "Checking link status for $wifi_if (Wi-Fi)..."
+	local wifi_status=$(return_interface_status $wifi_if)
+	printf " $wifi_status\n"
+
+	# Turning of Wi-Fi will trigger a separate LaunchAgent, so we exit
+	# and let this script get run again from the top
+	if [[ $wifi_status == inactive ]]; then
+		notify "$wifi_if $wifi_status" "Turning on Wi-Fi"
+		printf "Turning on Wi-Fi... "
+		turn_on_airport $wifi_if
+		printf "DONE\n"
+		finish restart
+	fi
+
+	# If we get this far we should have associated with a Wi-Fi network
+	local ssid="$(get_ssid $wifi_if)"
+	local wifi_ip_address wifi_domain
+	if [[ -n $ssid ]]; then
+		wifi_ip_address=$(/usr/sbin/ipconfig getifaddr $wifi_if)
+		wifi_domain=$(/usr/sbin/ipconfig getoption $wifi_if domain_name)
+		[[ -n $wifi_domain ]] || wifi_domain="not_configured"
+		if [[ -n $wifi_ip_address ]]; then
+			if [[ $wifi_ip_address =~ [1-9] ]]; then
+				if [[ $ssid =~ $WORK_SSID ]] || [[ $wifi_domain =~ $WORK_DOMAIN_PATTERN ]]; then
+					switch_location "work" "$wifi_ip_address" "$(route -n get default | awk -F": " '/gateway/{ print $NF }')"
+				elif [[ $ssid =~ $HOME_SSID ]] || [[ $wifi_domain =~ $HOME_DOMAIN_PATTERN ]]; then
+					switch_location "home" "$wifi_ip_address" "$APPLE_TIME_SERVER"
+				else
+					notify "SSID: $ssid" "IP: $wifi_ip_address"
+					quit_program "Cisco AnyConnect Secure Mobility Client"
+					quit_program "Proxifier"
+					quit_program "Oracle Content.app/Contents/MacOS/JavaAppLauncher"
+				fi
+				finish "$wifi_if" "$wifi_ip_address"
+			else
+				printf "DEBUG: \$wifi_ip_address is invalid: ${wifi_ip_address}\n"
+				finish
+			fi
+		fi
+	else
+		notify "Timeout" "No known networks responded in time"
+		finish
+	fi
+}
+
 #-------------------------------------------------------------------------------
 # Main script
 #
 #
 
-# If -t is passed as an option than set as throttle limit
-while getopts ":t:p:" OPTION; do
-	case $OPTION in
-		t) THROTTLE=$OPTARG ;;
-		p) PAUSE_TO_SETTLE="y"
-		   PAUSE_TIME=$OPTARG ;;
-		?) ;;
-	esac
-done
-shift $(( OPTIND-1 ))
-
-# Purge log if it is megabyte(s)
-log_file=$(defaults read /Users/${USER}/Library/LaunchAgents/local.netwatcher StandardOutPath)
-log_size=$(du -k $log_file | awk '{print $1}')
-if (( log_size > 1024 )); then
-	: > $log_file
-	printf "$(date '+%b %d %H:%M:%S'): Purged $log_file\n"
-fi
-
-# Log start of main logic
-printf %b%s%b "\n" "$(print_dashes 20) $(date '+%b %d %H:%M:%S') $(print_dashes 21)" "\n"
-
-# Exit if we ran less than $THROTTLE seconds ago
-if [[ -r $LAST_MARKER ]]; then
-	now=$(date +%s)
-	last_update=$(stat -f %m $LAST_MARKER)
-	if (( $(( now - last_update )) < THROTTLE )); then
-		printf "Ran less than $THROTTLE seconds ago, exiting.\n"
-		finish
-	fi
-fi
-
-printf "Probing for [previously] configured interfaces...\n"
-interfaces="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed -e s/^'(Hardware Port: '// -e s/\)// | sort)"
-IFS=$(printf "\n\b")
-for interface in $interfaces; do
-	printf "	$interface\n"
-	if [[ $interface =~ Bridge ]]; then
-		BRIDGE_IF=$(printf $interface | awk '{ print $NF }')
-	elif [[ $interface =~ Ethernet ]]; then
-		ETHERNET_IF=$(printf $interface | awk '{ print $NF }')
-	elif [[ $interface =~ Wi-Fi ]]; then
-		WIFI_IF=$(printf $interface | awk '{ print $NF }')
-	fi
-done
-unset IFS
-
-# If we have an active bridge it trumps ethnernet interface
-bridge_status=$(return_interface_status $BRIDGE_IF)
-if [[ $bridge_status == active ]]; then
-	$ETHERNET_IF=$BRIDGE_IF
-fi
-
-# See if we have an active VPN connection
-printf "Probing for actively tunneled connections...\n"
-(( count=0 ))
-for utun_interface in $(ifconfig | grep -o '^utun[0-9].*:' | sed 's/://'); do
-	VPN_IP=$(/sbin/ifconfig $utun_interface 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
-	if [[ $VPN_IP =~ [1-9] ]]; then
-		printf "	$utun_interface: $VPN_IP\n"
-		VPN_IF=$utun_interface
-		(( count=count+1 ))
-	fi
-done
-
-if (( count > 1 )); then
-	printf "More than one utun interface with an IP. This is unexpected! Using $VPN_IF\n"
-elif (( count == 0 )); then
-	VPN_IF="none"
-fi
-
-# Make sure something is different than the last run (should always be the case, but...)
-if [[ -r $LAST_MARKER ]]; then
-	last_config="$(cat $LAST_MARKER)"
-	if ifconfig -lu | grep -oq $VPN_IF; then
-		if [[ "$last_config" == "$VPN_IF $(/sbin/ifconfig $VPN_IF | grep 'inet ' | awk '{ print $2 }')" ]]; then
-			nothing_changed="true"
-		fi
-	else
-		if [[ "$last_config" == "$WIFI_IF $(/usr/sbin/ipconfig getifaddr $WIFI_IF)" ]]; then
-			ethernet_status=$(return_interface_status $ETHERNET_IF)
-			if [[ $ethernet_status == inactive ]]; then
-				nothing_changed="true"
-			fi
-		elif [[ "$last_config" == "$ETHERNET_IF $(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)" ]]; then
-			nothing_changed="true"
-		fi
-	fi
-	
-	if [[ $nothing_changed == true ]]; then
-		printf "Nothing has changed. The active network is still: $last_config\n"
-		finish
-	fi
-fi
-
-if [[ $PAUSE_TO_SETTLE == y ]]; then
-   printf "Pausing $PAUSE_TIME seconds to let interfaces settle... "
-   for (( count=$PAUSE_TIME; count!=0; count-- )) { sleep 1 ; printf "$count "; }
-   printf "\n"
-fi
-
-# VPN trumps everything
-VPN_IP=$(/sbin/ifconfig $VPN_IF 2>/dev/null | grep 'inet ' | awk '{ print $2 }')
-if [[ $VPN_IP =~ [1-9] ]]; then
-		if grep -qs oracle /etc/resolv.conf ; then
-			switch_location "work"
-		else
-			switch_location "home"
-		fi
-		finish "$VPN_IF" "$VPN_IP"
-fi
-
-# Ethernet trumps Wi-Fi no matter what
-if [[ $ETHERNET == true ]] && [[ -n $ETHERNET_IF ]]; then
-	printf "Checking link status for $ETHERNET_IF (ethernet)..."
-	ethernet_status=$(return_interface_status $ETHERNET_IF)
-	(( count=0 )) # If cable was just plugged-in we need time for DHCP to do its thing
-	while [[ $ethernet_status != active ]] && (( count != 5 )); do
-		sleep 1
-		printf "."
-		ethernet_status=$(return_interface_status $ETHERNET_IF)
-		(( count++ ))
-	done
-	printf " $ethernet_status\n"
-	
-	if [[ $ethernet_status == active ]]; then
-		printf "Fetching IP and domain info for $ETHERNET_IF (ethernet)..."
-		IP=$(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)
-		(( count=0 ))
-		while [[ ! $IP =~ [1-9] ]] && (( count != 15 )); do
-			sleep 1
-			printf "."
-			IP=$(/usr/sbin/ipconfig getifaddr $ETHERNET_IF)
-			(( count++ ))
-		done
-		
-		DOMAIN=$(/usr/sbin/ipconfig getoption $ETHERNET_IF domain_name)
-		
-		if [[ $IP =~ [1-9] ]]; then
-			if [[ $IP =~ $WORK_IP_PATTERN ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
-				switch_location "work"
-			else
-				switch_location "home"
-			fi
-			printf "On ethernet, turning off Wi-Fi... "
-			turn_off_airport $WIFI_IF
-			printf "DONE\n"
-			finish "$ETHERNET_IF $IP"
-		else
-			printf " timed out\n"
-		fi
-	fi
-fi
-
-# If no ethernet, try Wi-Fi
-printf "Checking link status for $WIFI_IF (Wi-Fi)..."
-wifi_status=$(return_interface_status $WIFI_IF)
-printf " $wifi_status\n"
-
-# Turning of Wi-Fi will trigger a separate LaunchAgent, so we exit
-# and let this script get run again from the top
-if [[ $wifi_status == inactive ]]; then
-	notify "$WIFI_IF $wifi_status" "Turning on Wi-Fi"
-	printf "Turning on Wi-Fi... "
-	turn_on_airport $WIFI_IF
-	printf "DONE\n"
-	finish restart
-fi
-
-# TODO (?) - accept a hash of known SSIDs and their respective prefs, then
-# act accordingly. Too much work for me as I see no action necessary
-# for a public hotspot beyond killing off Proxifier and the else clause
-# below does that
-
-# Okey dokey. By now we should have associated with a Wi-Fi network
-IP=""
-SSID="$(get_ssid $WIFI_IF)"
-if [[ -n $SSID ]]; then
-	IP=$(/usr/sbin/ipconfig getifaddr $WIFI_IF)
-	DOMAIN=$(/usr/sbin/ipconfig getoption $WIFI_IF domain_name)
-	if [[ $IP =~ [1-9] ]]; then
-		if [[ $SSID =~ $WORK_SSID ]] || [[ $DOMAIN =~ $WORK_DOMAIN_PATTERN ]]; then
-			switch_location "work"
-		elif [[ $SSID =~ $HOME_SSID ]] || [[ $DOMAIN =~ $HOME_DOMAIN_PATTERN ]]; then
-			switch_location "home"
-		else
-			notify "SSID: $SSID" "IP: $IP"
-			quit_program "Cisco AnyConnect Secure Mobility Client"
-			quit_program "Proxifier"
-			quit_program "Oracle Content.app/Contents/MacOS/JavaAppLauncher"
-		fi
-	fi
+if (($# == 0)); then
+	main
 else
-	notify "Timeout" "No known networks responded in time"
+	main "${@}"
 fi
 
-finish "$WIFI_IF" "$IP"
+# If we got here something went wrong
+exit 1
