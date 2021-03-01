@@ -83,9 +83,7 @@ For example:
 Edit `~/Library/Scripts/netwatcher` (please consider contributing your changes if they don’t suck :-P). Change preferences in `~/.netwatcher/config` or by running `./setup -r`
 
 ### Logging
-The log is stored in `~/Library/Logs` and will auto-purge when >= 1MB. It is best viewed in Console.app:<br />
-
-![Console.app](http://effinthing.com/netwatcher/console_app.png)
+The log is stored in `~/Library/Logs` and will auto-purge when >= 1MB. It is best viewed in Console.app
 
 ### Notification Center
 If terminal-notifier is installed, Notification Center alerts are (optionally) sent when netwatcher takes action. You can install terminal-notifier via [Homebrew](https://formulae.brew.sh/formula/terminal-notifier) <br />
