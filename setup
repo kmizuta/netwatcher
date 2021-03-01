@@ -13,10 +13,10 @@ ask ()
 		read reply
 		done=true
 		case $reply in
-			n | N | no | NO	  ) ANSWER="n"	;;
-			y | Y | yes | YES ) ANSWER="y" ;;
+			n | N | no | NO	  ) answer="n"	;;
+			y | Y | yes | YES ) answer="y" ;;
 			*				  ) printf "\nInvalid response. Try again:"
-									  done=false ;;
+								done=false ;;
 		esac
 	done
 }
@@ -30,9 +30,9 @@ collect_response ()
 	while [[ $done == false ]]; do
 		printf "${question}\n"
 		printf "[ Enter = $default ]: "
-		read RESPONSE
-		[[ -z $RESPONSE ]] && RESPONSE="$default"
-		printf "Is \"$RESPONSE\" correct? (y/n) "
+		read response
+		[[ -z $response ]] && response="$default"
+		printf "Is \"$response\" correct? (y/n) "
 		read reply
 		case $reply in
 			n | N | no | NO	  ) done=false ;;
@@ -63,7 +63,7 @@ Usage: $(basename $0) [-u] [-r] [-t secs] [-p secs]
 	   -t Time (in seconds) that must pass between network changes for them to be considered valid
 	   -p Time (in seconds) to pause before evaluating a network change to allow interfaces to settle
 
-Example: $0 -t 5 -p 10
+Example: $0 -t 5 -p 3
 
 EOF
 	 exit 0
@@ -71,8 +71,7 @@ EOF
 
 errtrap ()
 {	# Die if we trap an error
-	 ES=${?}
-	 printf "ERROR line ${1}: Command exited with status ${ES}.\n" |\
+	 printf "ERROR line ${1}: Command exited with status ${?}.\n" |\
 	 exit 1
 }
 
@@ -80,12 +79,12 @@ errtrap ()
 # Main script
 while getopts ":urt:p:" OPTION; do
 	 case $OPTION in
-		  u) UNINSTALL=true ;;
-		  r) REINSTALL=true ;;
-		  t) THROTTLE=true
-			 THROTTLE_TIME=$OPTARG ;;
-		  p) PAUSE_TO_SETTLE=true
-			 PAUSE_TIME=$OPTARG ;;
+		  u) uninstall=true ;;
+		  r) reinstall=true ;;
+		  t) throttle=true
+			 throttle_time=$OPTARG ;;
+		  p) pause_to_settle=true
+			 pause_time=$OPTARG ;;
 		  ?) usage ;;
 	 esac
 done
@@ -94,8 +93,8 @@ shift $(( OPTIND-1 ))
 # trap errors
 trap 'errtrap ${LINENO}' ERR
 
-[[ $UNINSTALL == true ]] && uninstall
-[[ $REINSTALL == true ]] && rm -f $CONFIG_FILE
+[[ $uninstall == true ]] && uninstall
+[[ $reinstall == true ]] && rm -f $CONFIG_FILE
 
 # Stop existing install
 launchctl unload \
@@ -111,9 +110,8 @@ else
 	mkdir -p "$CONFIG_DIR"
 	touch "$CONFIG_FILE"
 
-	printf "Do you want to watch for wired ethernet connections?"
-	ask
-	if [[ $ANSWER == y ]]; then
+	printf "Do you want to watch for wired ethernet connections?" ; ask
+	if [[ $answer == y ]]; then
 		printf "ETHERNET=true\n" >> $CONFIG_FILE
 	else
 		printf "ETHERNET=false\n" >> $CONFIG_FILE
@@ -121,11 +119,10 @@ else
 
 	ls -d "/Applications/Adium.app" > /dev/null 2>&1
 	if (( $? == 0 )); then
-		printf "Do you want to change your status in Adium when your connection changes?"
-		ask
-		if [[ $ANSWER == y ]]; then
+		printf "Do you want to change your status in Adium when your connection changes?" ; ask
+		if [[ $answer == y ]]; then
 			collect_response "Enter your Adium account username" "$(id -un)"
-			printf "ADIUM_ACCOUNT=\"$RESPONSE\"\n" >> $CONFIG_FILE
+			printf "ADIUM_ACCOUNT=\"$response\"\n" >> $CONFIG_FILE
 			printf "\nModify $CONFIG_FILE to change the status messages\n"
 			printf "ADIUM=\"true\"\n" >> $CONFIG_FILE
 			printf "ADIUM_WORK_STATUS=\"Away\"\n" >> $CONFIG_FILE
@@ -152,6 +149,13 @@ else
 		printf "DROPBOX=\"false\"\n" >> $CONFIG_FILE
 	fi
 
+	ls -d "/Applications/nextcloud.app" > /dev/null 2>&1
+	if (( $? == 0 )); then
+		printf "NEXTCLOUD=\"true\"\n" >> $CONFIG_FILE
+	else
+		printf "NEXTCLOUD=\"false\"\n" >> $CONFIG_FILE
+	fi
+
 	ls -d "/Applications/Oracle Documents.app" > /dev/null 2>&1
 	if (( $? == 0 )); then
 		printf "ORADOCS=\"true\"\n" >> $CONFIG_FILE
@@ -171,15 +175,14 @@ else
 	printf "\n$(lpstat -d)\n\n"
 	default_printer=$(lpstat -d | awk '{ print $NF }')
 	collect_response "Enter the name of your work printer or \"none\" to disable this feature" "$default_printer"
-	printf "WORK_PRINTER=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "WORK_PRINTER=\"$response\"\n" >> $CONFIG_FILE
 	collect_response "Enter the name of your home printer or \"none\" to disable this feature" "$default_printer"
-	printf "HOME_PRINTER=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "HOME_PRINTER=\"$response\"\n" >> $CONFIG_FILE
 
 	PATH=/usr/local/bin:${PATH} which -s terminal-notifier
 	if (( $? == 0 )); then
-		printf "Do you want to enable Notification Center alerts?"
-		ask
-		if [[ $ANSWER == y ]]; then
+		printf "Do you want to enable Notification Center alerts?" ; ask
+		if [[ $answer == y ]]; then
 			printf "NOTIFICATION_CENTER=true\n" >> $CONFIG_FILE
 		else
 			printf "NOTIFICATION_CENTER=false\n" >> $CONFIG_FILE
@@ -189,39 +192,39 @@ else
 	fi
 
 	collect_response "Enter the IP address pattern of your workplace" "10.[0-9][0-9][0-9]"
-	printf "WORK_IP_PATTERN=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "WORK_IP_PATTERN=\"$response\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the domain suffix pattern of your workplace" "example.com"
-	printf "WORK_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "WORK_DOMAIN_PATTERN=\"$response\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the SSID for your workplace" "clear-corporate"
-	printf "WORK_SSID=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "WORK_SSID=\"$response\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the SSID for your home" "You kids get off my LAN"
-	printf "HOME_SSID=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "HOME_SSID=\"$response\"\n" >> $CONFIG_FILE
 
 	collect_response "Enter the domain suffix pattern for your home" "local"
-	printf "HOME_DOMAIN_PATTERN=\"$RESPONSE\"\n" >> $CONFIG_FILE
+	printf "HOME_DOMAIN_PATTERN=\"$response\"\n" >> $CONFIG_FILE
 fi
 
 cat $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist_template | sed "s/USERX/$USER/g" > $(dirname $0)/Library/LaunchAgents/local.netwatcher.plist
 cp -r $(dirname $0)/Library ~/
 
-[[ $THROTTLE == true ]] && THROTTLE_OPTIONS="-t$THROTTLE_TIME"
-[[ $PAUSE_TO_SETTLE == true ]] && PAUSE_OPTIONS="-p$PAUSE_TIME"
+[[ $throttle == true ]] && throttle_options="-t$throttle_time"
+[[ $pause_to_settle == true ]] && pause_options="-p$pause_time"
 
-ARGS=("$THROTTLE_OPTIONS" "$PAUSE_OPTIONS")
-for (( i=0; i<${#ARGS[@]}; i++ )); do
-   if (( ${#ARGS[i]} == 0 )); then
-	  unset ARGS[i]
+args=("$throttle_options" "$pause_options")
+for (( i=0; i<${#args[@]}; i++ )); do
+   if (( ${#args[i]} == 0 )); then
+	  unset args[i]
    fi
 done
 
-if [[ $THROTTLE == true ]] || [[ $PAUSE_TO_SETTLE == true ]]; then
-	printf "Setting options to: $THROTTLE_OPTIONS $PAUSE_OPTIONS\n"
+if [[ $throttle == true ]] || [[ $pause_to_settle == true ]]; then
+	printf "Setting options to: $throttle_options $pause_options\n"
 	defaults write ${HOME}/Library/LaunchAgents/local.netwatcher.plist \
 		 ProgramArguments \
-		 -array "${HOME}/Library/Scripts/netwatcher" ${ARGS[@]}
+		 -array "${HOME}/Library/Scripts/netwatcher" ${args[@]}
 	plutil -convert xml1 ~/Library/LaunchAgents/local.netwatcher.plist
 fi
 

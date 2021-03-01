@@ -15,6 +15,7 @@ This script will execute any time there is a network change and can:
 * Start/Stop [Proxifier](http://www.proxifier.com)
 * Start/Stop Cisco AnyConnect VPN
 * Start/Stop Dropbox
+* Start/Stop NextCloud
 * Start/Stop Oracle Documents
 * Turn Wi-Fi on/off based on presence/state of wired Ethernet
 
@@ -22,7 +23,7 @@ This script will execute any time there is a network change and can:
 
 1. Install [Github](http://mac.github.com)
 2. Go to <https://github.com/dfelicia/netwatcher>
-3. Click the Clone in Mac button:<br />![clone_netwatcher](http://effinthing.com/netwatcher/clone_netwatcher.png "Clone netwatcher")
+3. Click the Clone in Mac button
 4. Open a terminal and cd to the directory where you cloned the repository; for example `cd ~/github/local/netwatcher`
 5. Execute: `./setup` with desired options. Pass `-h` for usage
 6. Answer the questions
