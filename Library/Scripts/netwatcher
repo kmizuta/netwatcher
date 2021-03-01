@@ -65,6 +65,33 @@ turn_off_airport() {
 	sleep 5 # triggers another network_change
 }
 
+enable_proxy() {
+	local service
+
+	printf "Enabling WPAD Automatic Proxy URL\n"
+	IFS="$(printf "\n\b")"
+	for service in $(/usr/sbin/networksetup -listnetworkserviceorder | \
+	                 awk '/\([0-9]\).*Wi-Fi/ || /\([0-9]\).*Ethernet/{ print }' | \
+					 sed 's/([0-9]) //'); do
+		/usr/sbin/networksetup -setautoproxyurl ${service} http://wpad/wpad.dat
+		/usr/sbin/networksetup -setautoproxystate ${service} on
+	done
+	unset IFS
+}
+
+disable_proxy() {
+	local service
+
+	printf "Disabling WPAD Automatic Proxy URL\n"
+	IFS="$(printf "\n\b")"
+	for service in $(/usr/sbin/networksetup -listnetworkserviceorder | \
+	                 awk '/\([0-9]\).*Wi-Fi/ || /\([0-9]\).*Ethernet/{ print }' | \
+					 sed 's/([0-9]) //'); do
+		/usr/sbin/networksetup -setautoproxystate ${service} off
+	done
+	unset IFS
+}
+
 return_interface_status() {
 	local interface="${1}"
 	local status="$(/sbin/ifconfig ${interface} 2>/dev/null | awk '/status:/ { print $NF }')"
@@ -100,11 +127,15 @@ quit_program() {
 }
 
 set_adium_status() {
+	[[ ${ADIUM} == false ]] && return 0
+	
 	local status="${1}"
 	declare -i count
 	local state="$(return_program_status "Adium")"
 
 	[[ ${state} == inactive ]] && open -a Adium
+
+	sleep 5
 		
 	printf "Changing Adium status"
 	if [[ ${status} == Offline ]]; then
@@ -189,6 +220,7 @@ switch_location() {
 		notify "Location: Work" "IP: ${ip_address}"
 
 		[[ ${DROPBOX} == true ]] && quit_program "Dropbox"
+		[[ ${NEXTCLOUD} == true ]] && quit_program "nextcloud"
 
 		if [[ ${PROXIFIER} == true ]]; then	
 			proxifier_status="$(return_program_status "Contents/MacOS/Proxifier")"
@@ -205,6 +237,7 @@ switch_location() {
 			fi
 		fi
 	
+		enable_proxy
 		set_ntp_server "${ntp_server}"
 		set_default_printer "${WORK_PRINTER}"
 		set_adium_status "${ADIUM_WORK_STATUS}"
@@ -220,7 +253,14 @@ switch_location() {
 				open -a "Dropbox" && printf "Started Dropbox\n"
 			fi
 		fi
+		
+		if [[ ${NEXTCLOUD} == true ]]; then
+			if [[ $(return_program_status "nextcloud.app/Contents/MacOS/nextcloud") == inactive ]]; then
+				open -a "nextcloud" && printf "Started Nextcloud\n"
+			fi
+		fi
 
+		disable_proxy
 		set_ntp_server "${ntp_server}"
 		set_default_printer "${HOME_PRINTER}"
 		set_adium_status "${ADIUM_HOME_STATUS}"
@@ -317,22 +357,35 @@ main() {
 	fi
 
 	# See if we have an active VPN connection
-	local vpn_if vpn_ip_address
+	local id="$(id -un)"
+	local mytemp="$(mktemp -t ${id}.xxxx)"
+	local vpn_if=$(scutil --nwi | grep -m1 'utun' | awk '{ print $1 }')
+	local vpn_ip_address
+
 	printf "Checking link status for VPN..."
-	for vpn_if in $(ifconfig | grep -o '^utun[0-9].*:' | sed 's/://'); do
-		printf "."
-		vpn_ip_address="$(/sbin/ifconfig ${vpn_if} 2>/dev/null | grep 'inet ' | awk '{ print $2 }')"
+	if [[ -n ${vpn_if} ]]; then
+		if [[ ${CISCO_ANYCONNECT} == true ]] && [[ -x /opt/cisco/anyconnect/bin/vpn ]]; then
+			/opt/cisco/anyconnect/bin/vpn stats > ${mytemp}
+			grep -m 1 -qs 'state: Connected' ${mytemp}
+			if (( $? == 0 )); then
+				vpn_ip_address=$(awk '/Client Address \(IPv4\):/{ print $NF }' ${mytemp})
+			else
+				vpn_ip_address="$(/sbin/ifconfig ${vpn_if} 2>/dev/null | grep 'inet ' | awk '{ print $2 }')"
+			fi
+		elif [[ ${vpn_if} =~ utun ]]; then
+			vpn_ip_address="$(/sbin/ifconfig ${vpn_if} 2>/dev/null | grep 'inet ' | awk '{ print $2 }')"
+		fi
+
 		if [[ -n ${vpn_ip_address} ]]; then
 			if [[ ${vpn_ip_address} =~ [1-9] ]]; then
 				printf " active (${vpn_if})\n"
-				# There should only be one utun interface with an IP, but we'll break on the first found
-				break
 			fi
 		fi
-	done
-	
-	[[ -n ${vpn_ip_address} ]] || { vpn_ip_address="inactive"; printf " inactive\n"; }
-	[[ -n ${vpn_if} ]] || vpn_if="not_configured"
+	else
+		vpn_ip_address="inactive"
+		vpn_if="not_configured"
+		printf " inactive\n"
+	fi
 
 	# Make sure something is different than the last run (should always be the case, but...)
 	if [[ -r ${LAST_MARKER} ]]; then
@@ -361,7 +414,7 @@ main() {
 	if [[ -n ${vpn_ip_address} ]]; then
 		if [[ ${vpn_ip_address} =~ [1-9] ]]; then
 			if grep -qs "${WORK_DOMAIN_PATTERN}" /etc/resolv.conf ; then
-				switch_location "work" "${vpn_ip_address}" $(grep -a -m 1 '^nameserver' /etc/resolv.conf | awk '{ print $NF }')
+				switch_location "work" "${vpn_ip_address}" $(grep -a -m 1 '^nameserver .*\.' /etc/resolv.conf | awk '{ print $NF }')
 			else
 				switch_location "home" "${vpn_ip_address}" "${APPLE_TIME_SERVER}"
 			fi
