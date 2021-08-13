@@ -123,7 +123,21 @@ quit_program() {
 	local friendly_name="$(echo ${program} | awk -F/ '{ print $NF }')"
 	
 	printf "Stopping ${friendly_name}\n"
-	pkill -f "${program}" > /dev/null 2>&1
+	#osascript -e "quit app \"${friendly_name}\""
+	/usr/bin/osascript <<- EOF
+		try
+			tell application "${friendly_name}" to quit
+		on error error_message number error_number
+			if error_number is equal to 128 then
+				delay 1
+				do shell script "pkill -f \"${program}\" > /dev/null 2>&1"
+			else
+				copy error_message to stdout
+			end if
+		end try
+		EOF
+	#sleep .5
+	#pkill -f "${program}" > /dev/null 2>&1
 }
 
 set_adium_status() {
@@ -141,18 +155,18 @@ set_adium_status() {
 	if [[ ${status} == Offline ]]; then
 		/usr/bin/osascript <<- EOF
 			tell application "System Events"
-			if exists process "Adium" then
-			tell application "Adium" to go offline account "${ADIUM_ACCOUNT}"
-			end if
+				if exists process "Adium" then
+					tell application "Adium" to go offline account "${ADIUM_ACCOUNT}"
+				end if
 			end tell
 			EOF
 	else
 		/usr/bin/osascript <<- EOF
 			tell application "System Events"
-			if exists process "Adium" then
-			tell application "Adium" to go online account "${ADIUM_ACCOUNT}"
-			tell application "Adium" to go away
-			end if
+				if exists process "Adium" then
+					tell application "Adium" to go online account "${ADIUM_ACCOUNT}"
+					tell application "Adium" to go away
+				end if
 			end tell
 			EOF
 	fi
