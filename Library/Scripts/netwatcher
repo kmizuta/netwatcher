@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # exit if script tries to use undeclared variables.
 set -u
@@ -121,18 +121,18 @@ return_program_status() {
 quit_program() {
 	local program="${1}"
 	local friendly_name="$(echo ${program} | awk -F/ '{ print $NF }')"
-	
+
 	printf "Stopping ${friendly_name}\n"
 	#osascript -e "quit app \"${friendly_name}\""
-	/usr/bin/osascript <<- EOF
+	/usr/bin/osascript <<- EOF >/dev/null 2>&1
 		try
 			tell application "${friendly_name}" to quit
 		on error error_message number error_number
-			if error_number is equal to 128 then
+			if (error_number is equal to 128) or (error_message contains "canceled") then
 				delay 1
 				do shell script "pkill -f \"${program}\" > /dev/null 2>&1"
 			else
-				copy error_message to stdout
+				say error_message
 			end if
 		end try
 		EOF
@@ -142,15 +142,15 @@ quit_program() {
 
 set_adium_status() {
 	[[ ${ADIUM} == false ]] && return 0
-	
+
 	local status="${1}"
 	declare -i count
 	local state="$(return_program_status "Adium")"
 
-	[[ ${state} == inactive ]] && open -a Adium
+	[[ ${state} == inactive ]] && open -ga Adium
 
 	sleep 5
-		
+
 	printf "Changing Adium status"
 	if [[ ${status} == Offline ]]; then
 		/usr/bin/osascript <<- EOF
@@ -195,7 +195,7 @@ set_ntp_server() {
 	# spawn sudo as it'll prompt for a password
 	(sudo -l > "${mytemp}" 2>&1) &
 	pid=$!
-	
+
 	sleep 1
 
 	grep -sqi 'NOPASSWD.*ALL' ${mytemp} 2>/dev/null
@@ -205,7 +205,7 @@ set_ntp_server() {
 	nopasswd_systemsetup=$?
 
 	if ( ((nopasswd_all == 0)) || ((nopasswd_systemsetup == 0)) ); then
-		sudo systemsetup -setnetworktimeserver ${ntp_server}
+		sudo systemsetup -setnetworktimeserver ${ntp_server} 2>/dev/null
 		sudo sntp -Ss ${ntp_server} 2>/dev/null | tail -n1
 	else
 		printf "${id} does not have passwordless sudo access. NTP server cannot be changed.\n"
@@ -233,26 +233,37 @@ switch_location() {
 	if [[ ${location} == work ]]; then
 		notify "Location: Work" "IP: ${ip_address}"
 
+        local val
+        declare -i i=0
+        declare -a stats=()
+        sleep 1
+        for val in $(/opt/cisco/anyconnect/bin/vpn stats | awk '/Server Address:/ || /Protocol:/ { print $NF }'); do
+            stats[$i]=$val; i=$(( i + 1 ))
+        done
+        server=$(/usr/bin/dig -x ${stats[0]} +short | sed s/\.$//)
+        proto=${stats[1]}
+        printf "VPN Server: ${server}\nVPN Protocol: ${proto}\n"
+
 		[[ ${DROPBOX} == true ]] && quit_program "Dropbox"
 		[[ ${NEXTCLOUD} == true ]] && quit_program "nextcloud"
 
-		if [[ ${PROXIFIER} == true ]]; then	
+		if [[ ${PROXIFIER} == true ]]; then
 			proxifier_status="$(return_program_status "Contents/MacOS/Proxifier")"
 			if [[ ${proxifier_status} == inactive ]]; then
-				open -a "Proxifier"
+				open -ga "Proxifier"
 				printf "Started Proxifier [ pid: $(pgrep -f 'Contents/MacOS/Proxifier') ]\n"
 			fi
 		fi
-		
+
 		if [[ ${ORADOCS} == true ]]; then
 			if [[ $(return_program_status "Oracle Content") == inactive ]]; then
-				open -a "Oracle Content"
+				open -ga "Oracle Content"
 				printf "Started Oracle Documents [ pid $(pgrep -f Oracle\ Content.app/Contents/MacOS/JavaAppLauncher)  ]\n"
 			fi
 		fi
-	
+
 		enable_proxy
-		set_ntp_server "${ntp_server}"
+		# set_ntp_server "${ntp_server}"
 		set_default_printer "${WORK_PRINTER}"
 		set_adium_status "${ADIUM_WORK_STATUS}"
 	else
@@ -261,21 +272,21 @@ switch_location() {
 		[[ ${CISCO_ANYCONNECT} == true ]] && quit_program "Cisco AnyConnect Secure Mobility Client"
 		[[ ${PROXIFIER} == true ]] && quit_program "Proxifier"
 		[[ ${ORADOCS} == true  ]] && quit_program "Oracle Content.app/Contents/MacOS/JavaAppLauncher"
-		
+
 		if [[ ${DROPBOX} == true ]]; then
 			if [[ $(return_program_status "Dropbox.app/Contents/MacOS/Dropbox") == inactive ]]; then
-				open -a "Dropbox" && printf "Started Dropbox\n"
+				open -ga "Dropbox" && printf "Started Dropbox\n"
 			fi
 		fi
-		
+
 		if [[ ${NEXTCLOUD} == true ]]; then
 			if [[ $(return_program_status "nextcloud.app/Contents/MacOS/nextcloud") == inactive ]]; then
-				open -a "nextcloud" && printf "Started Nextcloud\n"
+				open -ga "nextcloud" && printf "Started Nextcloud\n"
 			fi
 		fi
 
 		disable_proxy
-		set_ntp_server "${ntp_server}"
+		# set_ntp_server "${ntp_server}"
 		set_default_printer "${HOME_PRINTER}"
 		set_adium_status "${ADIUM_HOME_STATUS}"
 	fi
@@ -294,7 +305,7 @@ finish() {
 	local last_config=""
 
 	(($# > 0)) && last_config="${@}"
-	
+
 	if [[ -n ${last_config} ]] && [[ ${last_config} != restart ]]; then
 		printf "${last_config}" > ${LAST_MARKER}
 	elif [[ ${last_config} == restart ]]; then
@@ -345,7 +356,7 @@ main() {
 	fi
 
 	printf "Probing for configured bridge, ethernet, or wi-fi network interfaces...\n"
-	local configured_interface bridge_if ethernet_if wifi_if 
+	local configured_interface bridge_if ethernet_if wifi_if
 	local interfaces="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed -e s/^'(Hardware Port: '// -e s/\)// | sort)"
 	IFS="$(printf "\n\b")"
 	for configured_interface in ${interfaces}; do
@@ -417,7 +428,7 @@ main() {
 				nothing_changed="true"
 			fi
 		fi
-		
+
 		if [[ ${nothing_changed} == true ]]; then
 			printf "Nothing has changed. The active network is still: ${last_config}\n"
 			finish
@@ -449,7 +460,7 @@ main() {
 			((count++))
 		done
 		printf " ${ethernet_status}\n"
-		
+
 		if [[ ${ethernet_status} == active ]]; then
 			printf "Fetching IP and domain info for ${ethernet_if} (ethernet)..."
 			ethernet_ip_address="$(/usr/sbin/ipconfig getifaddr ${ethernet_if})"
@@ -460,7 +471,7 @@ main() {
 				ethernet_ip_address="$(/usr/sbin/ipconfig getifaddr ${ethernet_if})"
 				((count++))
 			done
-			
+
 			ethernet_domain="$(/usr/sbin/ipconfig getoption ${ethernet_if} domain_name 2>/dev/null)"
 			[[ -n ${ethernet_domain} ]] || ethernet_domain="not_configured"
 			if [[ -n ${ethernet_ip_address} ]]; then
