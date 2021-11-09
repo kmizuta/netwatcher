@@ -68,7 +68,6 @@ turn_off_airport() {
 enable_proxy() {
 	local service
 
-	printf "Enabling WPAD Automatic Proxy URL\n"
 	IFS="$(printf "\n\b")"
 	for service in $(/usr/sbin/networksetup -listnetworkserviceorder | \
 	                 awk '/\([0-9]\).*Wi-Fi/ || /\([0-9]\).*Ethernet/{ print }' | \
@@ -77,12 +76,12 @@ enable_proxy() {
 		/usr/sbin/networksetup -setautoproxystate ${service} on
 	done
 	unset IFS
+    printf "WPAD Automatic Proxy URL: enabled\n"
 }
 
 disable_proxy() {
 	local service
 
-	printf "Disabling WPAD Automatic Proxy URL\n"
 	IFS="$(printf "\n\b")"
 	for service in $(/usr/sbin/networksetup -listnetworkserviceorder | \
 	                 awk '/\([0-9]\).*Wi-Fi/ || /\([0-9]\).*Ethernet/{ print }' | \
@@ -90,6 +89,7 @@ disable_proxy() {
 		/usr/sbin/networksetup -setautoproxystate ${service} off
 	done
 	unset IFS
+    printf "WPAD Automatic Proxy URL: disabled\n"
 }
 
 return_interface_status() {
@@ -122,7 +122,6 @@ quit_program() {
 	local program="${1}"
 	local friendly_name="$(echo ${program} | awk -F/ '{ print $NF }')"
 
-	printf "Stopping ${friendly_name}\n"
 	#osascript -e "quit app \"${friendly_name}\""
 	/usr/bin/osascript <<- EOF >/dev/null 2>&1
 		try
@@ -136,8 +135,10 @@ quit_program() {
 			end if
 		end try
 		EOF
-	#sleep .5
-	#pkill -f "${program}" > /dev/null 2>&1
+	sleep .5
+	pkill -f "${program}" > /dev/null 2>&1
+    sleep .5
+    printf "${friendly_name}: stopped\n"
 }
 
 set_adium_status() {
@@ -147,7 +148,7 @@ set_adium_status() {
 	declare -i count
 	local state="$(return_program_status "Adium")"
 
-	[[ ${state} == inactive ]] && open -ga Adium
+	[[ ${state} == inactive ]] && open -gja Adium
 
 	sleep 5
 
@@ -236,29 +237,31 @@ switch_location() {
         local val
         declare -i i=0
         declare -a stats=()
-        sleep 1
+        sleep 2
         for val in $(/opt/cisco/anyconnect/bin/vpn stats | awk '/Server Address:/ || /Protocol:/ { print $NF }'); do
             stats[$i]=$val; i=$(( i + 1 ))
         done
-        server=$(/usr/bin/dig -x ${stats[0]} +short | sed s/\.$//)
-        proto=${stats[1]}
-        printf "VPN Server: ${server}\nVPN Protocol: ${proto}\n"
+        if (( ${#stats[*]} > 0 )); then
+            server=$(/usr/bin/dig -x ${stats[0]} +short | sed s/\.$//)
+            proto=${stats[1]}
+            printf "VPN Server: ${server}\nVPN Protocol: ${proto}\n"
+        fi
 
 		[[ ${DROPBOX} == true ]] && quit_program "Dropbox"
-		[[ ${NEXTCLOUD} == true ]] && quit_program "nextcloud"
+		[[ ${NEXTCLOUD} == true ]] && quit_program "Nextcloud"
 
 		if [[ ${PROXIFIER} == true ]]; then
 			proxifier_status="$(return_program_status "Contents/MacOS/Proxifier")"
 			if [[ ${proxifier_status} == inactive ]]; then
-				open -ga "Proxifier"
-				printf "Started Proxifier [ pid: $(pgrep -f 'Contents/MacOS/Proxifier') ]\n"
+				open -gja "Proxifier"
+				printf "Proxifier: started [ pid $(pgrep -f 'Contents/MacOS/Proxifier') ]\n"
 			fi
 		fi
 
 		if [[ ${ORADOCS} == true ]]; then
 			if [[ $(return_program_status "Oracle Content") == inactive ]]; then
-				open -ga "Oracle Content"
-				printf "Started Oracle Documents [ pid $(pgrep -f Oracle\ Content.app/Contents/MacOS/JavaAppLauncher)  ]\n"
+				open -gja "Oracle Content"
+				printf "Oracle Content: started [ pid $(pgrep -f Oracle\ Content.app/Contents/MacOS/JavaAppLauncher) ]\n"
 			fi
 		fi
 
@@ -275,13 +278,13 @@ switch_location() {
 
 		if [[ ${DROPBOX} == true ]]; then
 			if [[ $(return_program_status "Dropbox.app/Contents/MacOS/Dropbox") == inactive ]]; then
-				open -ga "Dropbox" && printf "Started Dropbox\n"
+				open -gja "Dropbox" && printf "Dropbox: started [ pid $(pgrep -f Contents/MacOS/Dropbox) ]\n"
 			fi
 		fi
 
 		if [[ ${NEXTCLOUD} == true ]]; then
-			if [[ $(return_program_status "nextcloud.app/Contents/MacOS/nextcloud") == inactive ]]; then
-				open -ga "nextcloud" && printf "Started Nextcloud\n"
+			if [[ $(return_program_status "Nextcloud.app/Contents/MacOS/Nextcloud") == inactive ]]; then
+				open -gja "Nextcloud" && printf "Nextcloud: started [ pid $(pgrep -f Contents/MacOS/Nextcloud) ]\n"
 			fi
 		fi
 
@@ -337,6 +340,7 @@ main() {
 
 	# Log start of main logic
 	printf %b%s%b "\n" "$(print_dashes 20) $(date '+%b %d %H:%M:%S') $(print_dashes 21)" "\n"
+    printf "Change to /etc/resolv.conf detected\n"
 
 	# Exit if we ran less than ${THROTTLE} seconds ago
 	if [[ -r ${LAST_MARKER} ]]; then
@@ -350,17 +354,18 @@ main() {
 
 	# If -p was passed, pause to settle
 	if [[ ${PAUSE_TO_SETTLE} == y ]]; then
-		printf "Pausing ${PAUSE_TIME} seconds to let interfaces settle... "
+        printf "Waiting for interfaces to settle: "
 		for ((count=${PAUSE_TIME}; count!=0; count--)) { sleep 1 ; printf "${count} "; }
-		printf "\n"
+        printf "\n"
 	fi
 
-	printf "Probing for configured bridge, ethernet, or wi-fi network interfaces...\n"
 	local configured_interface bridge_if ethernet_if wifi_if
 	local interfaces="$(/usr/sbin/networksetup -listnetworkserviceorder | grep [0-9]\)$ | sed -e s/^'(Hardware Port: '// -e s/\)// | sort)"
+
+    printf "Configured network interfaces:\n"
 	IFS="$(printf "\n\b")"
 	for configured_interface in ${interfaces}; do
-		printf "	${configured_interface}\n"
+		printf "    - ${configured_interface}\n"
 		if [[ ${configured_interface} =~ Bridge ]]; then
 			bridge_if="$(printf ${configured_interface} | awk '{ print $NF }')"
 		elif [[ ${configured_interface} =~ Ethernet ]]; then
@@ -373,7 +378,14 @@ main() {
 
 	[[ -n ${bridge_if} ]] || bridge_if="not_configured"
 	[[ -n ${ethernet_if} ]] || ethernet_if="not_configured"
-	[[ -n ${wifi_if} ]] || wifi_if="not_configured"
+
+    local wifi_status
+    if [[ -n ${wifi_if} ]]; then
+        wifi_status="$(return_interface_status ${wifi_if})"
+	    printf "${wifi_if} (Wi-Fi): ${wifi_status}\n"
+    else
+        wifi_if="not_configured"
+    fi
 
 	# If we have an active bridge we'll treat it as an ethnernet interface
 	local bridge_status="$(return_interface_status ${bridge_if})"
@@ -385,31 +397,34 @@ main() {
 	local id="$(id -un)"
 	local mytemp="$(mktemp -t ${id}.xxxx)"
 	local vpn_if=$(scutil --nwi | grep -m1 'utun' | awk '{ print $1 }')
+    local vpn_state
 	local vpn_ip_address
 
-	printf "Checking link status for VPN..."
-	if [[ -n ${vpn_if} ]]; then
-		if [[ ${CISCO_ANYCONNECT} == true ]] && [[ -x /opt/cisco/anyconnect/bin/vpn ]]; then
-			/opt/cisco/anyconnect/bin/vpn stats > ${mytemp}
-			grep -m 1 -qs 'state: Connected' ${mytemp}
-			if (( $? == 0 )); then
-				vpn_ip_address=$(awk '/Client Address \(IPv4\):/{ print $NF }' ${mytemp})
-			else
-				vpn_ip_address="$(/sbin/ifconfig ${vpn_if} 2>/dev/null | grep 'inet ' | awk '{ print $2 }')"
-			fi
-		elif [[ ${vpn_if} =~ utun ]]; then
-			vpn_ip_address="$(/sbin/ifconfig ${vpn_if} 2>/dev/null | grep 'inet ' | awk '{ print $2 }')"
-		fi
+	printf "${vpn_if:=utun} (VPN): "
+    if [[ ${CISCO_ANYCONNECT} == true ]] && [[ -x /opt/cisco/anyconnect/bin/vpn ]]; then
+        # Every once in a while vpn stats kills itself... cisco bug?
+        /opt/cisco/anyconnect/bin/vpn stats > ${mytemp} 2> /dev/null || \
+        { sleep 2; /opt/cisco/anyconnect/bin/vpn stats > ${mytemp}; }
+        vpn_state=$(awk '/  Connection State:/ { print $NF }' ${mytemp})
+        # Could be Connected, Connecting, or Diconnected
+        if [[ ${vpn_state} == Connected ]]; then
+            vpn_ip_address=$(awk '/Client Address \(IPv4\):/{ print $NF }' ${mytemp})
+        elif [[ ${vpn_state} == Connecting ]]; then
+            for ((count=5; count!=0; count--)) { sleep 1 ; printf "."; }
+            vpn_ip_address=$(awk '/Client Address \(IPv4\):/{ print $NF }' ${mytemp})
+        fi
+    elif [[ ${vpn_if} =~ utun ]]; then # Might be using openconnect or other client
+        vpn_ip_address="$(/sbin/ifconfig ${vpn_if} 2>/dev/null | grep 'inet ' | awk '{ print $2 }')"
+    fi
 
-		if [[ -n ${vpn_ip_address} ]]; then
-			if [[ ${vpn_ip_address} =~ [1-9] ]]; then
-				printf " active (${vpn_if})\n"
-			fi
-		fi
+    if [[ -n ${vpn_ip_address} ]]; then
+        if [[ ${vpn_ip_address} =~ [1-9] ]]; then
+            printf "active\n"
+        fi
 	else
 		vpn_ip_address="inactive"
 		vpn_if="not_configured"
-		printf " inactive\n"
+		printf "inactive\n"
 	fi
 
 	# Make sure something is different than the last run (should always be the case, but...)
@@ -430,7 +445,7 @@ main() {
 		fi
 
 		if [[ ${nothing_changed} == true ]]; then
-			printf "Nothing has changed. The active network is still: ${last_config}\n"
+			printf "The active network is still: ${last_config}\n"
 			finish
 		fi
 	fi
@@ -449,64 +464,53 @@ main() {
 
 	# Ethernet trumps Wi-Fi
 	if [[ ${ETHERNET} == true ]] && [[ -n ${ethernet_if} ]]; then
-		printf "Checking link status for ${ethernet_if} (ethernet)..."
+		printf "${ethernet_if} (Ethernet): "
 		local ethernet_status="$(return_interface_status ${ethernet_if})"
 		local ethernet_ip_address ethernet_domain
 		((count=0)) # If cable was just plugged-in we need time for DHCP to do its thing
 		while [[ ${ethernet_status} != active ]] && ((count != 5)); do
 			sleep 1
-			printf "."
 			ethernet_status="$(return_interface_status ${ethernet_if})"
 			((count++))
 		done
-		printf " ${ethernet_status}\n"
+		printf "${ethernet_status}\n"
 
 		if [[ ${ethernet_status} == active ]]; then
-			printf "Fetching IP and domain info for ${ethernet_if} (ethernet)..."
+			printf "IP for ${ethernet_if} (Ethernet): "
 			ethernet_ip_address="$(/usr/sbin/ipconfig getifaddr ${ethernet_if})"
 			((count=0))
-			while [[ ! ${ethernet_ip_address} =~ [1-9] ]] && ((count != 15)); do
+			while [[ ! ${ethernet_ip_address} =~ [1-9] ]] && (( count != 15 )); do
 				sleep 1
-				printf "."
 				ethernet_ip_address="$(/usr/sbin/ipconfig getifaddr ${ethernet_if})"
 				((count++))
 			done
+            printf "${ethernet_ip_address:=null}\n"
 
 			ethernet_domain="$(/usr/sbin/ipconfig getoption ${ethernet_if} domain_name 2>/dev/null)"
-			[[ -n ${ethernet_domain} ]] || ethernet_domain="not_configured"
-			if [[ -n ${ethernet_ip_address} ]]; then
-				printf " done\n"
-				if [[ ${ethernet_ip_address} =~ [1-9] ]]; then
-					if [[ ${ethernet_ip_address} =~ ${WORK_IP_PATTERN} ]] || [[ ${ethernet_domain} =~ ${WORK_DOMAIN_PATTERN} ]]; then
-						switch_location "work" "${ethernet_ip_address}" "$(route -n get default | awk -F": " '/gateway/{ print $NF }')"
-					else
-						switch_location "home" "${ethernet_ip_address}" "${APPLE_TIME_SERVER}"
-					fi
-					printf "On ethernet, turning off Wi-Fi... "
-					turn_off_airport ${wifi_if}
-					printf "DONE\n"
-					finish "${ethernet_if} ${ethernet_ip_address}"
-				else
-					printf "DEBUG: \${ethernet_ip_address} is: ${ethernet_ip_address}\n"
-				fi
-			else
-				printf " timed out\n"
-			fi
+            if [[ ${ethernet_ip_address:=null} =~ [1-9] ]]; then
+                if [[ ${ethernet_ip_address} =~ ${WORK_IP_PATTERN} ]] || [[ ${ethernet_domain:=not_configured} =~ ${WORK_DOMAIN_PATTERN} ]]; then
+                    switch_location "work" "${ethernet_ip_address}" "$(route -n get default | awk -F": " '/gateway/{ print $NF }')"
+                else
+                    switch_location "home" "${ethernet_ip_address}" "${APPLE_TIME_SERVER}"
+                fi
+                if [[ ${wifi_status} == active ]]; then
+                    printf "On ethernet, turning off Wi-Fi... "
+                    turn_off_airport ${wifi_if}
+                    printf "done\n"
+                fi
+                finish "${ethernet_if} ${ethernet_ip_address}"
+            fi
 		fi
 	fi
 
 	# If no ethernet, try Wi-Fi
-	printf "Checking link status for ${wifi_if} (Wi-Fi)..."
-	local wifi_status="$(return_interface_status ${wifi_if})"
-	printf " ${wifi_status}\n"
-
-	# Turning of Wi-Fi will trigger a separate LaunchAgent, so we exit
+	# Turning off Wi-Fi will trigger a separate LaunchAgent, so we exit
 	# and let this script get run again from the top
 	if [[ ${wifi_status} == inactive ]]; then
 		notify "${wifi_if} ${wifi_status}" "Turning on Wi-Fi"
-		printf "Turning on Wi-Fi... "
+		printf "Turning on Wi-Fi: "
 		turn_on_airport ${wifi_if}
-		printf "DONE\n"
+		printf "done\n"
 		finish restart
 	fi
 
