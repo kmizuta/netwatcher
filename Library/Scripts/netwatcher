@@ -176,12 +176,17 @@ switch_location() {
 		declare -i i=0
 		declare -a stats=()
 		sleep 2
-		for val in $(/opt/cisco/anyconnect/bin/vpn stats | awk '/Server Address:/ || /Protocol:/ { print $NF }'); do
+		for val in $(/opt/cisco/anyconnect/bin/vpn stats | awk '/notice: Connected to / || /Server Address:/ || /Protocol:/ { print $NF }'); do
 		    stats[$i]=$val; i=$(( i + 1 ))
 		done
-		if (( ${#stats[*]} > 0 )); then
-		    server=$(/usr/bin/dig -x ${stats[0]} +short | sed s/\.$//)
-		    proto=${stats[1]}
+		if (( ${#stats[*]} > 2 )); then
+		    server=$(/usr/bin/dig -x ${stats[1]} +short | sed s/\.$//)
+		    proto=${stats[2]}
+
+		    if [[ $server == "" ]]; then
+			# Sometimes dig doesn't return the hostname. 
+			server=$(echo ${stats[0]} | sed 's/\.$//')
+		    fi
 		    printf "VPN Server: ${server}\nVPN Protocol: ${proto}\n"
 		fi
 		
